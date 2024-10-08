@@ -73,6 +73,51 @@ class StochasticGD(GradientDescent):
         return theta, epoch
 
 # Testing
+class RMSPropGD(GradientDescent):
+    def advance(self):
+        delta = 1e-6
+        epsilon = 1e-3
+        rho = 0.9
+        r = rho * r + (1 - rho)*self.gradient @ self.gradient
+        return self.eta*self.gradient / np.sqrt(r + delta)
+
+    def fit(self):
+        super.fit()
+        r = 0
+
+
+class AdaGrad(GradientDescent):
+    def fit(self):
+        super.fit()
+        self.r = 0
+        self.epsilon = 1e-3
+        self.delta = 1e-7
+
+    def advance(self):
+        self.r = self.r + self.gradient @ self.gradient
+        return self.epsilon/(self.delta + np.sqrt(self.r)) * self.gradient
+    
+
+class ADAM(GradientDescent):
+    def fit(self):
+        super.fit()
+        self.r = 0
+        self.s = 0
+        self.t = 0
+        self.epsilon = 0.001
+        self.rho1 = 0.9
+        self.rho2 = 0.999
+        self.delta = 1e-2
+
+    def advance(self):
+        self.t = self.t + 1
+        self.s = self.rho1*self.s + (1 - self.rho1) * self.gradient
+        self.r = self.rho2*self.r + (1 - self.rho2) * self.gradient @ self.gradient
+
+        s_hat = self.s/(1 - self.rho1**self.t)
+        r_hat = self.r/(1 - self.rho2**self.t)
+
+        return self.epsilon * s_hat/np.sqrt(r_hat) + self.delta
 
 def gradient_OLS(X, y, theta):
     n = X.shape[0]
