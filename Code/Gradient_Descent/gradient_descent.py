@@ -1,23 +1,23 @@
 import numpy as np
+from sklearn.base import BaseEstimator, RegressorMixin
+from sklearn.model_selection import GridSearchCV
 #from typing import Callable
 
 np.random.seed(3)
 
-class GradientDescent:
+class GradientDescent(BaseEstimator, RegressorMixin):       # adds compatibility with scikit-learn framework
     """
     Class that implements Gradient Descent with and without momentum.
     
     Attributes
     ----------
-    X : np.ndarray
-        The input feature matrix.
-    Y : np.ndarray
-        The output/target vector.
-    cost : Callable (default 0) 
-            Cost function to be minimized (not implemented currently).
+        epsilon (float): Learning rate.
+        max_iter (int, optional): Maximum number of iterations. Default is 1_000.
+        tol (float, optional): Tolerance for stopping criteria. Default is 1e-6.
+        momentum (float, optional): Momentum term for gradient update. Default is 0.
     """
-    def __init__(self, eta=0.01, max_iter=1000, tol=1e-6, momentum=0.0):
-        self.eta = eta
+    def __init__(self, epsilon=0.01, max_iter=1000, tol=1e-6, momentum=0.0):
+        self.epsilon = epsilon
         self.max_iter = max_iter
         self.tol = tol
         self.momentum = momentum
@@ -27,17 +27,13 @@ class GradientDescent:
         Fits the model using gradient descent.
 
         Args:
-            derivative (callable): Derivative of the cost function w.r.t parameters.
-            eta (float): Learning rate.
-            max_iter (int, optional): Maximum number of iterations. Default is 1_000.
-            tol (float, optional): Tolerance for stopping criteria. Default is 1e-6.
-            momentum (float, optional): Momentum term for gradient update. Default is 0.
+            X (np.ndarray): The input feature matrix.
+            Y (np.ndarray): The output/target vector.
 
         Returns:
             tuple: A tuple containing the optimized parameters and the number of iterations performed.
         """
-
-        n, p = self.X.shape
+        n, p = X.shape
         self.change = 2*self.tol # Might be too radical
         self.theta = .1*np.random.randn(p) # Initial guess, range ~[-1,1] (perhaps very bad guess for unscaled data)
 
@@ -47,9 +43,12 @@ class GradientDescent:
             self.change = self._advance()
             self.theta -= self.change
             idx += 1
-        return theta, idx
+        return self.theta, idx
     
     def _compute_gradient(self, X, y, theta):
+        """ 
+        Gradient calculation of the Mean Squared Error for OLS.
+        """
         return (X.T @ (X @ theta - y)) / len(y)
 
     def _advance(self):
@@ -59,7 +58,7 @@ class GradientDescent:
         Returns:
             np.ndarray: The change in parameters to be subtracted from the current parameters.
         """
-        return self.eta*self.gradient + self.change*self.momentum
+        return self.epsilon*self.gradient + self.change*self.momentum
     
     def predict(self, X):
         """
@@ -72,51 +71,50 @@ class GradientDescent:
 
 
 class StochasticGD(GradientDescent):
-    def fit(self, 
-            derivative, 
-            eta: float, 
-            epochs=1_000,
-            batch_size=16,
-            tol=1e-6,
-            momentum=0):
+    """
+    Class for implementing Stochastic Gradient Descent.
+
+    Attributes
+    ----------
+        epochs (int): Maximum number of iterations. Default is 1_000.
+        batch_size (int, optional): Size of the mini-batches. Default is 16.
+    """
+    def __init__(self, epsilon=0.01, max_iter=1000, tol=1e-6, momentum=0.0, epochs=1_000, batch_size=16):
+        super().__init__(epsilon, max_iter, tol, momentum)
+        self.epochs = epochs
+        self.batch_size = batch_size
+
+    def fit(self, X, y):
         """
         Fits the model using stochastic gradient descent.
 
         Args:
-            derivative (callable): Derivative of the cost function w.r.t parameters.
-            eta (float): Learning rate.
-            epochs (int, optional): Maximum number of iterations. Default is 1_000.
-            batch_size (int, optional): Size of the mini-batches. Default is 16.
-            tol (float, optional): Tolerance for stopping criteria. Default is 1e-6.
-            momentum (float, optional): Momentum term for gradient update. Default is 0.
+            X (np.ndarray): The input feature matrix.
+            Y (np.ndarray): The output/target vector.
 
         Returns:
             tuple: A tuple containing the optimized parameters and the number of iterations performed.
         """
-        self.eta = eta
-        self.momentum = momentum
-        
-        X, Y = self.X, self.Y 
         n, p = X.shape
 
         epoch = 0
-        self.change = 2*tol
-        theta = np.random.randn(p)
+        self.change = 2*self.tol
+        self.theta = np.random.randn(p)
 
         indices = np.arange(n)
-        while epoch < epochs and np.mean(np.abs(self.change)) > tol:
+        while epoch < self.epochs and np.mean(np.abs(self.change)) > self.tol:
             np.random.shuffle(indices)
 
-            for start in range(0,n,batch_size):
-                batch_indices = indices[start:start+batch_size]
-                Xi, Yi = X[batch_indices], Y[batch_indices]
+            for start in range(0, n, self.batch_size):
+                batch_indices = indices[start:start+self.batch_size]
+                Xi, yi = X[batch_indices], y[batch_indices]
 
-                self.gradient = derivative(Xi, Yi, theta)
+                self.gradient = self._compute_gradient(Xi, yi, self.theta)
                 self.change = self._advance()
-                theta -= self.change
+                self.theta -= self.change
             epoch += 1
 
-        return theta, epoch
+        return self.theta, epoch
 
 
 class RMSPropGD(StochasticGD):
@@ -126,19 +124,25 @@ class RMSPropGD(StochasticGD):
     Attributes:
         rho (float): Decay rate for the moving average of squared gradients.
         delta (float): Small value to prevent division by zero in the update rule.
-        epsilon (float): Learning rate for the optimizer (same as eta in base class).
         r (float): Moving average of squared gradients.
     """
-    def __init__(self, X: np.ndarray, Y: np.ndarray, cost=0):
-        super().__init__(X, Y, cost)
-        self.rho = 0.9
-        self.delta = 1e-6
-        self.epsilon = 1e-3
+    def __init__(self, 
+                 epsilon=0.001, 
+                 max_iter=1000, 
+                 tol=1e-6, 
+                 momentum=0.0, 
+                 epochs=1_000, 
+                 batch_size=16,
+                 rho=0.9,
+                 delta=1e-6):
+        super().__init__(epsilon, max_iter, tol, momentum, epochs, batch_size)
+        self.rho = rho
+        self.delta = delta
         self.r = 0
 
-    def advance(self):
+    def _advance(self):
         self.r = self.rho * self.r + (1 - self.rho)*self.gradient @ self.gradient
-        return self.eta*self.gradient / np.sqrt(self.r + self.delta)
+        return self.epsilon*self.gradient / np.sqrt(self.r + self.delta)
         
 
 class AdaGradGD(StochasticGD):
@@ -147,16 +151,21 @@ class AdaGradGD(StochasticGD):
 
     Attributes:
         delta (float): Small value to prevent division by zero in the update rule.
-        epsilon (float): Learning rate for the optimizer (same as eta in base class).
         r (float): Accumulated sum of squared gradients.
     """
-    def __init__(self, X: np.ndarray, Y: np.ndarray, cost=0):
-        super().__init__(X, Y, cost)
-        self.delta = 1e-7
-        self.epsilon = 1e-3
+    def __init__(self, 
+                 epsilon=0.001, 
+                 max_iter=1000, 
+                 tol=1e-6, 
+                 momentum=0.0, 
+                 epochs=1_000, 
+                 batch_size=16,
+                 delta=1e-7):
+        super().__init__(epsilon, max_iter, tol, momentum, epochs, batch_size)
+        self.delta = delta
         self.r = 0
 
-    def advance(self):
+    def _advance(self):
         self.r = self.r + self.gradient @ self.gradient
         return self.epsilon/(self.delta + np.sqrt(self.r)) * self.gradient
     
@@ -184,7 +193,7 @@ class ADAMGD(StochasticGD):
         self.s = 0
         self.t = 0
 
-    def advance(self):
+    def _advance(self):
         self.t = self.t + 1
         self.s = self.rho1*self.s + (1 - self.rho1) * self.gradient
         self.r = self.rho2*self.r + (1 - self.rho2) * self.gradient @ self.gradient
@@ -194,8 +203,41 @@ class ADAMGD(StochasticGD):
 
         return self.epsilon * s_hat/np.sqrt(r_hat) + self.delta
 
+if __name__ == "__main__":
+
+    from sklearn.datasets import make_regression
+    from sklearn.model_selection import train_test_split, GridSearchCV
+
+    # Example data
+    X, y = make_regression(n_samples=100, n_features=10, noise=0.1)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+    # Define the parameter grid for GradientDescent
+    param_grid_gd = {
+        'epsilon': [1e-3, 1e-2, 1e-1],
+        'momentum': [0.0, 0.5, 0.9],
+        'max_iter': [500, 1000, 2000],
+        'tol': [1e-6, 1e-5, 1e-4]
+    }
+
+    # Perform a grid search for GradientDescent
+    grid_search_gd = GridSearchCV(estimator=AdaGradGD(), param_grid=param_grid_gd, cv=3, scoring='neg_mean_squared_error')
+    grid_search_gd.fit(X_train, y_train)
+
+    # Best parameters and score
+    print("Best parameters for GradientDescent:", grid_search_gd.best_params_)
+    print("Best score for GradientDescent:", grid_search_gd.best_score_)
+
+    # Predictions using the best model
+    best_gd_model = grid_search_gd.best_estimator_
+    y_pred_gd = best_gd_model.predict(X_test)
+
+    # Example output (Add any additional metrics you want to evaluate here)
+    from sklearn.metrics import mean_squared_error
+    print("MSE for best GradientDescent model:", mean_squared_error(y_test, y_pred_gd))
 
 
+'''
 # Testing 
 if __name__ == "__main__":
     def gradient_OLS(X, y, theta):
@@ -232,3 +274,4 @@ if __name__ == "__main__":
 
             print(model_name[idy], fit_type_name[idx])
             print(theta, n_iter)
+'''
