@@ -119,17 +119,18 @@ class ADAM(GradientDescent):
 
         return self.epsilon * s_hat/np.sqrt(r_hat) + self.delta
 
-def gradient_OLS(X, y, theta):
-    n = X.shape[0]
-    return (2.0/n)*X.T @ (X @ theta - y)
-
-# def gradient_Ridge(X, y, beta):
-#     llambda = 0.001
-#     n = X.shape[0]
-#     return 2.0/n*X.T @ (X@beta - y)+2*llambda*beta
 
 
 if __name__ == "__main__":
+    def gradient_OLS(X, y, theta):
+        n = X.shape[0]
+        return (2.0/n)*X.T @ (X @ theta - y)
+
+    # def gradient_Ridge(X, y, beta):
+    #     llambda = 0.001
+    #     n = X.shape[0]
+    #     return 2.0/n*X.T @ (X@beta - y)+2*llambda*beta
+
     n = 100
     x = 2*np.linspace(-1,1,n)
     y = 1 + 2*x + 3*x**2 #+ np.random.randn(n)
@@ -138,10 +139,10 @@ if __name__ == "__main__":
     X = np.c_[*(x**i for i in range(p+1))]
     
     gd = GradientDescent(X, y)
-    theta = gd.fit(gradient_OLS, 0.1, 1000)
+    theta = gd.fit(gradient_OLS, 0.1, 1000, momentum=.5)
 
     sgd = StochasticGD(X, y)
-    theta2 = sgd.fit(gradient_OLS, 0.1, 1000, 16)
+    theta2 = sgd.fit(gradient_OLS, 0.1, 1000, 16, momentum=.5)
 
     print(theta)
     print(theta2)
