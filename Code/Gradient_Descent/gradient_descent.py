@@ -16,17 +16,13 @@ class GradientDescent:
     cost : Callable (default 0) 
             Cost function to be minimized (not implemented currently).
     """
-    def __init__(self, X: np.ndarray, Y: np.ndarray, cost=0):
-        self.X = X
-        self.Y = Y
-        self.cost = cost # IF cost function, we should use AutoGrad (not implemented)
-
-    def fit(self, 
-            derivative, 
-            eta, 
-            max_iter=1_000,
-            tol=1e-6,
-            momentum=0):
+    def __init__(self, eta=0.01, max_iter=1000, tol=1e-6, momentum=0.0):
+        self.eta = eta
+        self.max_iter = max_iter
+        self.tol = tol
+        self.momentum = momentum
+            
+    def fit(self, X, y):
         """
         Fits the model using gradient descent.
 
@@ -40,23 +36,21 @@ class GradientDescent:
         Returns:
             tuple: A tuple containing the optimized parameters and the number of iterations performed.
         """
-        
-        self.eta = eta
-        self.momentum = momentum
 
-        X, Y = self.X, self.Y
-        n, p = X.shape
+        n, p = self.X.shape
+        self.change = 2*self.tol # Might be too radical
+        self.theta = .1*np.random.randn(p) # Initial guess, range ~[-1,1] (perhaps very bad guess for unscaled data)
 
         idx = 0
-        self.change = 2*tol # Might be too radical
-        theta = .1*np.random.randn(p) # Initial guess, range ~[-1,1] (perhaps very bad guess for unscaled data)
-
-        while idx < max_iter and np.mean(np.abs(self.change)) > tol: # Could make entire in-loop as advance at cost of indices-matrix
-            self.gradient = derivative(X, Y, theta)
+        while idx < self.max_iter and np.mean(np.abs(self.change)) > self.tol: # Could make entire in-loop as advance at cost of indices-matrix
+            self.gradient = self._compute_gradient(X, y, self.theta)
             self.change = self._advance()
-            theta -= self.change
+            self.theta -= self.change
             idx += 1
         return theta, idx
+    
+    def _compute_gradient(self, X, y, theta):
+        return (X.T @ (X @ theta - y)) / len(y)
 
     def _advance(self):
         """
@@ -66,6 +60,15 @@ class GradientDescent:
             np.ndarray: The change in parameters to be subtracted from the current parameters.
         """
         return self.eta*self.gradient + self.change*self.momentum
+    
+    def predict(self, X):
+        """
+        Predicts the values of X with the calculated parameters theta.
+
+        Returns:
+            np.ndarray: The predicted values for input X.
+        """
+        return X @ self.theta
 
 
 class StochasticGD(GradientDescent):
