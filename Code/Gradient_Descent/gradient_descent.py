@@ -117,6 +117,15 @@ class StochasticGD(GradientDescent):
 
 
 class RMSPropGD(StochasticGD):
+    """
+    Implements the RMSProp optimization algorithm.
+
+    Attributes:
+        rho (float): Decay rate for the moving average of squared gradients.
+        delta (float): Small value to prevent division by zero in the update rule.
+        epsilon (float): Learning rate for the optimizer (same as eta in base class).
+        r (float): Moving average of squared gradients.
+    """
     def __init__(self, X: np.ndarray, Y: np.ndarray, cost=0):
         super().__init__(X, Y, cost)
         self.rho = 0.9
@@ -129,8 +138,15 @@ class RMSPropGD(StochasticGD):
         return self.eta*self.gradient / np.sqrt(self.r + self.delta)
         
 
-
 class AdaGradGD(StochasticGD):
+    """
+    Implements the AdaGrad optimization algorithm.
+
+    Attributes:
+        delta (float): Small value to prevent division by zero in the update rule.
+        epsilon (float): Learning rate for the optimizer (same as eta in base class).
+        r (float): Accumulated sum of squared gradients.
+    """
     def __init__(self, X: np.ndarray, Y: np.ndarray, cost=0):
         super().__init__(X, Y, cost)
         self.delta = 1e-7
@@ -143,6 +159,18 @@ class AdaGradGD(StochasticGD):
     
 
 class ADAMGD(StochasticGD):
+    """
+    Implements the ADAM optimization algorithm.
+
+    Attributes:
+        epsilon (float): Learning rate for the optimizer.
+        rho1 (float): Exponential decay rate for the first moment estimates.
+        rho2 (float): Exponential decay rate for the second moment estimates.
+        delta (float): Small value to prevent division by zero in the update rule.
+        r (float): Weighted average of squared gradients.
+        s (float): Weighted average of gradients.
+        t (int): Time step, used for bias correction.
+    """
     def __init__(self, X: np.ndarray, Y: np.ndarray, cost=0):
         super().__init__(X, Y, cost)
         self.epsilon = 0.001
@@ -171,10 +199,10 @@ if __name__ == "__main__":
         n = X.shape[0]
         return (2.0/n)*X.T @ (X @ theta - y)
 
-    # def gradient_Ridge(X, y, beta):
-    #     llambda = 0.001
-    #     n = X.shape[0]
-    #     return 2.0/n*X.T @ (X@beta - y)+2*llambda*beta
+    def gradient_Ridge(X, y, beta):
+        llambda = 0.001
+        n = X.shape[0]
+        return 2.0/n*X.T @ (X@beta - y)+2*llambda*beta
 
     n = 100
     x = 2*np.linspace(-1,1,n)
@@ -182,24 +210,22 @@ if __name__ == "__main__":
 
     p = 2
     X = np.c_[*(x**i for i in range(p+1))]
-    
+
     gd = GradientDescent(X, y)
-    theta = gd.fit(gradient_OLS, 0.1, 1000, momentum=.5)
+    theta, n_iter = gd.fit(gradient_OLS, 0.1, 1000)
+    print(theta, n_iter)
 
-    sgd = StochasticGD(X, y)
-    theta2 = sgd.fit(gradient_OLS, 0.1, 1000, 16, momentum=.5)
+    gdm = GradientDescent(X, y)
+    theta, n_iter = gdm.fit(gradient_OLS, 0.1, 1000, momentum=.5)
+    print(theta, n_iter)
 
-    rms = RMSPropGD(X, y)
-    theta3 = rms.fit(gradient_OLS, 0.1, 1000, 16, momentum=0.5)
+    model_name = ['StochasticGD', 'RMSPropGD', 'AdaGradGD', 'ADAMGD']
+    fit_type_name = ['OLS', 'Ridge']
 
-    ada = AdaGradGD(X, y)
-    theta4 = ada.fit(gradient_OLS, 0.1, 1000, 16, momentum=0.5)
+    for idx, fit_type in enumerate([gradient_OLS, gradient_Ridge]):
+        for idy, model in enumerate([StochasticGD, RMSPropGD, AdaGradGD, ADAMGD]):
+            grad_descent = model(X, y)
+            theta, n_iter = grad_descent.fit(fit_type, 0.1, 1000, 16, momentum=.5)
 
-    adam = ADAMGD(X, y)
-    theta5 = adam.fit(gradient_OLS, 0.1, 1000, 16, momentum=0.5)
-
-    print(theta)
-    print(theta2)
-    print(theta3)
-    print(theta4)
-    print(theta5)
+            print(model_name[idy], fit_type_name[idx])
+            print(theta, n_iter)
