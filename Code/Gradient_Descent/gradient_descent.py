@@ -175,7 +175,6 @@ class ADAMGD(StochasticGD):
     Implements the ADAM optimization algorithm.
 
     Attributes:
-        epsilon (float): Learning rate for the optimizer.
         rho1 (float): Exponential decay rate for the first moment estimates.
         rho2 (float): Exponential decay rate for the second moment estimates.
         delta (float): Small value to prevent division by zero in the update rule.
@@ -183,12 +182,20 @@ class ADAMGD(StochasticGD):
         s (float): Weighted average of gradients.
         t (int): Time step, used for bias correction.
     """
-    def __init__(self, X: np.ndarray, Y: np.ndarray, cost=0):
-        super().__init__(X, Y, cost)
-        self.epsilon = 0.001
-        self.rho1 = 0.9
-        self.rho2 = 0.999
-        self.delta = 1e-2
+    def __init__(self, 
+                 epsilon=0.001, 
+                 max_iter=1000, 
+                 tol=1e-6, 
+                 momentum=0.0, 
+                 epochs=1_000, 
+                 batch_size=16,
+                 rho1=0.9,
+                 rho2 = 0.999,
+                 delta=1e-2):
+        super().__init__(epsilon, max_iter, tol, momentum, epochs, batch_size)
+        self.rho1 = rho1
+        self.rho2 = rho2
+        self.delta = delta
         self.r = 0
         self.s = 0
         self.t = 0
@@ -221,7 +228,7 @@ if __name__ == "__main__":
     }
 
     # Perform a grid search for GradientDescent
-    grid_search_gd = GridSearchCV(estimator=AdaGradGD(), param_grid=param_grid_gd, cv=3, scoring='neg_mean_squared_error')
+    grid_search_gd = GridSearchCV(estimator=ADAMGD(), param_grid=param_grid_gd, cv=3, scoring='neg_mean_squared_error')
     grid_search_gd.fit(X_train, y_train)
 
     # Best parameters and score
