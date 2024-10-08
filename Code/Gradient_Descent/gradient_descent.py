@@ -19,19 +19,18 @@ class GradientDescent:
 
     def fit(self):
         n_iter = 0
-        theta = np.random.randn(self.X.shape[1])
+        theta = 0.1*np.random.randn(self.X.shape[1])
         theta_new = np.zeros_like(theta)
         tol = 1e-9
         self.change = 0.0
         while np.mean(np.abs(theta - theta_new)) >= tol and n_iter < self.max_iter:
             self.gradient = self.derivative(self.X, self.Y, theta)
-            print(self.gradient.shape)
             self.change = self.advance()
             theta = theta_new.copy()
             theta_new -= self.change
             n_iter += 1
 
-        return theta_new
+        return theta_new, n_iter
 
     def advance(self):
         return self.eta*self.gradient + self.change*self.momentum
@@ -46,18 +45,18 @@ class StochasticGD(GradientDescent):
     def fit(self):
         n_iter = 0
         n, p  = self.X.shape
-        theta = np.random.randn(p)
+        theta = 0.1*np.random.randn(p)
         theta_new = np.zeros_like(theta)
         tol = 1e-9
         self.change = 0.0
         batch_size = self.batch_size
         X, Y = self.X, self.Y
 
-        indices = np.arange(p)
+        indices = np.arange(n)
         while np.mean(np.abs(theta - theta_new)) >= tol and n_iter < self.max_iter:
             np.random.shuffle(indices)
 
-            for start in range(0,n,batch_size):
+            for start in range(0, n, batch_size):
                 batch_indices = indices[start:start+batch_size]
                 Xi, Yi = X[batch_indices], Y[batch_indices]
 
@@ -68,7 +67,6 @@ class StochasticGD(GradientDescent):
             n_iter += 1
 
         return theta_new, n_iter
-
 
 
 def gradient_OLS(X, y, theta):
@@ -85,16 +83,16 @@ def derivative(x):
 
 if __name__ == "__main__":
     n = 100
-    x = 2*np.random.randn(n, 1)
+    x = np.linspace(0, 1, n)
     y = 3*x**2 + 2*x + 1 #+ np.random.randn(n,1)
 
     p = 2
     X = np.c_[*(x**i for i in range(p+1))]
     
-    gd = GradientDescent(X, y, gradient_OLS, 0.1, 100)
+    gd = GradientDescent(X, y, gradient_OLS, 0.001, 1000)
     theta = gd.fit()
 
-    sgd = StochasticGD(X, y, gradient_OLS, 0.1, 100)
+    sgd = StochasticGD(X, y, gradient_OLS, 0.044, 1001)
     theta2 = sgd.fit()
 
     print(theta)
