@@ -4,7 +4,18 @@ import numpy as np
 np.random.seed(3)
 
 class GradientDescent:
-    """"""
+    """
+    Class that implements Gradient Descent with and without momentum.
+    
+    Attributes
+    ----------
+    X : np.ndarray
+        The input feature matrix.
+    Y : np.ndarray
+        The output/target vector.
+    cost : Callable (default 0) 
+            Cost function to be minimized (not implemented currently).
+    """
     def __init__(self, X: np.ndarray, Y: np.ndarray, cost=0):
         self.X = X
         self.Y = Y
@@ -12,10 +23,23 @@ class GradientDescent:
 
     def fit(self, 
             derivative, 
-            eta: float, 
+            eta, 
             max_iter=1_000,
             tol=1e-6,
             momentum=0):
+        """
+        Fits the model using gradient descent.
+
+        Args:
+            derivative (callable): Derivative of the cost function w.r.t parameters.
+            eta (float): Learning rate.
+            max_iter (int, optional): Maximum number of iterations. Default is 1_000.
+            tol (float, optional): Tolerance for stopping criteria. Default is 1e-6.
+            momentum (float, optional): Momentum term for gradient update. Default is 0.
+
+        Returns:
+            tuple: A tuple containing the optimized parameters and the number of iterations performed.
+        """
         
         self.eta = eta
         self.momentum = momentum
@@ -35,11 +59,16 @@ class GradientDescent:
         return theta, idx
 
     def _advance(self):
+        """
+        Advances one step in the gradient descent algorithm.
+
+        Returns:
+            np.ndarray: The change in parameters to be subtracted from the current parameters.
+        """
         return self.eta*self.gradient + self.change*self.momentum
 
 
 class StochasticGD(GradientDescent):
-    """"""
     def fit(self, 
             derivative, 
             eta: float, 
@@ -47,6 +76,20 @@ class StochasticGD(GradientDescent):
             batch_size=16,
             tol=1e-6,
             momentum=0):
+        """
+        Fits the model using stochastic gradient descent.
+
+        Args:
+            derivative (callable): Derivative of the cost function w.r.t parameters.
+            eta (float): Learning rate.
+            epochs (int, optional): Maximum number of iterations. Default is 1_000.
+            batch_size (int, optional): Size of the mini-batches. Default is 16.
+            tol (float, optional): Tolerance for stopping criteria. Default is 1e-6.
+            momentum (float, optional): Momentum term for gradient update. Default is 0.
+
+        Returns:
+            tuple: A tuple containing the optimized parameters and the number of iterations performed.
+        """
         self.eta = eta
         self.momentum = momentum
         
@@ -72,42 +115,43 @@ class StochasticGD(GradientDescent):
 
         return theta, epoch
 
-# Testing
-class RMSPropGD(GradientDescent):
-    def advance(self):
-        delta = 1e-6
-        epsilon = 1e-3
-        rho = 0.9
-        r = rho * r + (1 - rho)*self.gradient @ self.gradient
-        return self.eta*self.gradient / np.sqrt(r + delta)
 
-    def fit(self):
-        super.fit()
-        r = 0
-
-
-class AdaGrad(GradientDescent):
-    def fit(self):
-        super.fit()
-        self.r = 0
+class RMSPropGD(StochasticGD):
+    def __init__(self, X: np.ndarray, Y: np.ndarray, cost=0):
+        super().__init__(X, Y, cost)
+        self.rho = 0.9
+        self.delta = 1e-6
         self.epsilon = 1e-3
+        self.r = 0
+
+    def advance(self):
+        self.r = self.rho * self.r + (1 - self.rho)*self.gradient @ self.gradient
+        return self.eta*self.gradient / np.sqrt(self.r + self.delta)
+        
+
+
+class AdaGradGD(StochasticGD):
+    def __init__(self, X: np.ndarray, Y: np.ndarray, cost=0):
+        super().__init__(X, Y, cost)
         self.delta = 1e-7
+        self.epsilon = 1e-3
+        self.r = 0
 
     def advance(self):
         self.r = self.r + self.gradient @ self.gradient
         return self.epsilon/(self.delta + np.sqrt(self.r)) * self.gradient
     
 
-class ADAM(GradientDescent):
-    def fit(self):
-        super.fit()
-        self.r = 0
-        self.s = 0
-        self.t = 0
+class ADAMGD(StochasticGD):
+    def __init__(self, X: np.ndarray, Y: np.ndarray, cost=0):
+        super().__init__(X, Y, cost)
         self.epsilon = 0.001
         self.rho1 = 0.9
         self.rho2 = 0.999
         self.delta = 1e-2
+        self.r = 0
+        self.s = 0
+        self.t = 0
 
     def advance(self):
         self.t = self.t + 1
@@ -121,6 +165,7 @@ class ADAM(GradientDescent):
 
 
 
+# Testing 
 if __name__ == "__main__":
     def gradient_OLS(X, y, theta):
         n = X.shape[0]
@@ -144,5 +189,17 @@ if __name__ == "__main__":
     sgd = StochasticGD(X, y)
     theta2 = sgd.fit(gradient_OLS, 0.1, 1000, 16, momentum=.5)
 
+    rms = RMSPropGD(X, y)
+    theta3 = rms.fit(gradient_OLS, 0.1, 1000, 16, momentum=0.5)
+
+    ada = AdaGradGD(X, y)
+    theta4 = ada.fit(gradient_OLS, 0.1, 1000, 16, momentum=0.5)
+
+    adam = ADAMGD(X, y)
+    theta5 = adam.fit(gradient_OLS, 0.1, 1000, 16, momentum=0.5)
+
     print(theta)
     print(theta2)
+    print(theta3)
+    print(theta4)
+    print(theta5)
