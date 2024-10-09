@@ -201,7 +201,7 @@ class ADAMGD(StochasticGD):
         self.t = 0
 
     def _advance(self):
-        self.t = self.t + 1
+        self.t += 1
         self.s = self.rho1*self.s + (1 - self.rho1) * self.gradient
         self.r = self.rho2*self.r + (1 - self.rho2) * self.gradient @ self.gradient
 
@@ -210,16 +210,20 @@ class ADAMGD(StochasticGD):
 
         return self.epsilon * s_hat/np.sqrt(r_hat) + self.delta
 
+
 if __name__ == "__main__":
-
-    from sklearn.datasets import make_regression
     from sklearn.model_selection import train_test_split, GridSearchCV
+    from sklearn.metrics import mean_squared_error
 
-    # Example data
-    X, y = make_regression(n_samples=100, n_features=10, noise=0.1)
+    n = 100
+    x = 2*np.linspace(-1,1,n)
+    y = 1 + 2*x + 3*x**2 #+ np.random.randn(n)
+
+    p = 2
+    X = np.c_[*(x**i for i in range(p+1))]
+
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-    # Define the parameter grid for GradientDescent
     param_grid_gd = {
         'epsilon': [1e-3, 1e-2, 1e-1],
         'momentum': [0.0, 0.5, 0.9],
@@ -227,7 +231,6 @@ if __name__ == "__main__":
         'tol': [1e-6, 1e-5, 1e-4]
     }
 
-    # Perform a grid search for GradientDescent
     grid_search_gd = GridSearchCV(estimator=ADAMGD(), param_grid=param_grid_gd, cv=3, scoring='neg_mean_squared_error')
     grid_search_gd.fit(X_train, y_train)
 
@@ -238,47 +241,5 @@ if __name__ == "__main__":
     # Predictions using the best model
     best_gd_model = grid_search_gd.best_estimator_
     y_pred_gd = best_gd_model.predict(X_test)
-
-    # Example output (Add any additional metrics you want to evaluate here)
-    from sklearn.metrics import mean_squared_error
+    
     print("MSE for best GradientDescent model:", mean_squared_error(y_test, y_pred_gd))
-
-
-'''
-# Testing 
-if __name__ == "__main__":
-    def gradient_OLS(X, y, theta):
-        n = X.shape[0]
-        return (2.0/n)*X.T @ (X @ theta - y)
-
-    def gradient_Ridge(X, y, beta):
-        llambda = 0.001
-        n = X.shape[0]
-        return 2.0/n*X.T @ (X@beta - y)+2*llambda*beta
-
-    n = 100
-    x = 2*np.linspace(-1,1,n)
-    y = 1 + 2*x + 3*x**2 #+ np.random.randn(n)
-
-    p = 2
-    X = np.c_[*(x**i for i in range(p+1))]
-
-    gd = GradientDescent(X, y)
-    theta, n_iter = gd.fit(gradient_OLS, 0.1, 1000)
-    print(theta, n_iter)
-
-    gdm = GradientDescent(X, y)
-    theta, n_iter = gdm.fit(gradient_OLS, 0.1, 1000, momentum=.5)
-    print(theta, n_iter)
-
-    model_name = ['StochasticGD', 'RMSPropGD', 'AdaGradGD', 'ADAMGD']
-    fit_type_name = ['OLS', 'Ridge']
-
-    for idx, fit_type in enumerate([gradient_OLS, gradient_Ridge]):
-        for idy, model in enumerate([StochasticGD, RMSPropGD, AdaGradGD, ADAMGD]):
-            grad_descent = model(X, y)
-            theta, n_iter = grad_descent.fit(fit_type, 0.1, 1000, 16, momentum=.5)
-
-            print(model_name[idy], fit_type_name[idx])
-            print(theta, n_iter)
-'''
