@@ -16,7 +16,7 @@ class GradientDescent(BaseEstimator, RegressorMixin):       # adds compatibility
         tol (float, optional): Tolerance for stopping criteria. Default is 1e-6.
         momentum (float, optional): Momentum term for gradient update. Default is 0.
     """
-    def __init__(self, epsilon=0.01, max_iter=1000, tol=1e-6, momentum=0.0):
+    def __init__(self, epsilon=0.01, max_iter=1000, tol=1e-6, momentum=0.0): # Er det ikke uptraktisk om man må lage en ny instans for å teste ulike hyperparametere? Men kanskje det gir mening, hvis Sklearn gjør det bra ig
         self.epsilon = epsilon
         self.max_iter = max_iter
         self.tol = tol
@@ -34,18 +34,20 @@ class GradientDescent(BaseEstimator, RegressorMixin):       # adds compatibility
             tuple: A tuple containing the optimized parameters and the number of iterations performed.
         """
         n, p = X.shape
-        self.change = 2*self.tol # Might be too radical
+        tol = self.tol
+        self.change = 2*tol # ~0
         self.theta = .1*np.random.randn(p) # Initial guess, range ~[-1,1] (perhaps very bad guess for unscaled data)
 
         idx = 0
-        while idx < self.max_iter and np.mean(np.abs(self.change)) > self.tol: # Could make entire in-loop as advance at cost of indices-matrix
-            self.gradient = self._compute_gradient(X, y, self.theta)
+        max_iter = self.max_iter
+        while idx < max_iter and np.mean(np.abs(self.change)) > tol: # Could make entire in-loop as advance at cost of indices-matrix
+            self.gradient = self._OLS_gradient(X, y, self.theta) # temporary? We must have the ability to change cost-function
             self.change = self._advance()
             self.theta -= self.change
             idx += 1
         return self.theta, idx
     
-    def _compute_gradient(self, X, y, theta):
+    def _MSE_gradient(self, X, y, theta): # should perhaps be default, but with option to use another
         """ 
         Gradient calculation of the Mean Squared Error for OLS.
         """
@@ -102,14 +104,15 @@ class StochasticGD(GradientDescent):
         self.theta = np.random.randn(p)
 
         indices = np.arange(n)
-        while epoch < self.epochs and np.mean(np.abs(self.change)) > self.tol:
+        epochs = self.epochs
+        while epoch < epochs and np.mean(np.abs(self.change)) > self.tol:
             np.random.shuffle(indices)
 
             for start in range(0, n, self.batch_size):
                 batch_indices = indices[start:start+self.batch_size]
                 Xi, yi = X[batch_indices], y[batch_indices]
 
-                self.gradient = self._compute_gradient(Xi, yi, self.theta)
+                self.gradient = self._MSE_gradient(Xi, yi, self.theta)
                 self.change = self._advance()
                 self.theta -= self.change
             epoch += 1
