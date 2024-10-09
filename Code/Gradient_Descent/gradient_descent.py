@@ -1,6 +1,6 @@
 import numpy as np
 from sklearn.base import BaseEstimator, RegressorMixin
-from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import GridSearchCV # må denne være her? ikke i if main?
 
 
 class GradientDescent(BaseEstimator, RegressorMixin):       # arguments add compatibility with scikit-learn framework
@@ -36,26 +36,28 @@ class GradientDescent(BaseEstimator, RegressorMixin):       # arguments add comp
         tol = self.tol
         self.change = 2*tol # ~0
         self.theta = .1*np.random.randn(p) # Initial guess, range ~[-1,1] (perhaps very bad guess for unscaled data)
-        self.indices = np.arange(self.n) # For SGD - this is technically wasted memory for non-SGD-methods (but it is cleaner with only one fit-method, and we'll mostly use SGD)
+        self.indices = np.arange(self.n) # For SGD - this is technically wasted memory for non-SGD-methods (but it is cleaner with only one fit-method, and we'll always use SGD)
 
-        idx = 0
+        epoch = 0
         epochs = self.epochs
-        while idx < epochs and np.mean(np.abs(self.change)) > tol:
+        while epoch < epochs and np.mean(np.abs(self.change)) > tol: # perhaps we should also add option to specify different stopping criterion.
             self._step()
-            idx += 1
-        return self.theta, idx
-    
+            epoch += 1
+        return self.theta, epoch
+
 
     def _step(self):
         self.gradient = self._MSE_gradient(X, y, self.theta) # temporary? We must have the ability to change cost-function. Don't send class-variables to a method.
         self.change = self._advance()
         self.theta -= self.change
 
+
     def _MSE_gradient(self, X, y, theta): # should perhaps be default, but with option to use another
         """ 
         Gradient calculation of the Mean Squared Error for OLS.
         """
         return 2/self.n * (X.T @ (X @ theta - y))
+
 
     def _advance(self):
         """
@@ -66,6 +68,7 @@ class GradientDescent(BaseEstimator, RegressorMixin):       # arguments add comp
         """
         return self.epsilon*self.gradient + self.change*self.momentum
     
+
     def predict(self, X):
         """
         Predicts the values of X with the calculated parameters theta.
