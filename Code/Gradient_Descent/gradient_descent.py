@@ -61,8 +61,8 @@ class GradientDescent(BaseEstimator, RegressorMixin):       # arguments add comp
 
 
     def _step(self):
-        cost_func , params = self.cost_func
-        self.gradient = self.cost_func(self.X, self.y, self.theta, *params) # temporary? We must have the ability to change cost-function. Don't send class-variables to a method.
+        cost_func, params = self.cost_func
+        self.gradient = cost_func(self.X, self.y, self.theta, *params) # temporary? We must have the ability to change cost-function. Don't send class-variables to a method.
         self.change = self._advance()
         self.theta -= self.change
 
