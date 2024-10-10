@@ -1,6 +1,14 @@
 import numpy as np
 from sklearn.base import BaseEstimator, RegressorMixin
 
+
+# Cost functions
+def MSE_OLS(X, y, theta):
+    return 2/n * (X.T @ (X @ theta - y))
+
+def MSE_Ridge(X, y, theta, llambda):
+    return 2.0/n*X.T @ (X @ (theta)-y)+2*llambda*theta
+
 class GradientDescent(BaseEstimator, RegressorMixin):       # arguments add compatibility with scikit-learn framework
     """
     Class that implements Gradient Descent with or without momentum.
@@ -11,12 +19,17 @@ class GradientDescent(BaseEstimator, RegressorMixin):       # arguments add comp
         epochs (int, optional): Number of passes through the dataset. Default is 1_000.
         tol (float, optional): Tolerance for stopping criteria. Default is 1e-6.
         momentum (float, optional): Momentum term for gradient update. Default is 0.
+        cost_func (Callable, optional): cost function for scoring, if None it is set to MSE for OLS
     """
-    def __init__(self, epsilon=0.01, epochs=1000, tol=1e-6, momentum=0.0):
+    def __init__(self, epsilon=0.01, epochs=1000, tol=1e-6, momentum=0.0, cost_func=None):
         self.epsilon = epsilon
         self.epochs = epochs
         self.tol = tol
         self.momentum = momentum
+        if cost_func == None:
+            self.cost_func = (MSE_OLS, [])
+        else:
+            self.cost_func = cost_func
 
 
     def fit(self, X, y):
@@ -48,16 +61,10 @@ class GradientDescent(BaseEstimator, RegressorMixin):       # arguments add comp
 
 
     def _step(self):
-        self.gradient = self._MSE_gradient(self.X, self.y, self.theta) # temporary? We must have the ability to change cost-function. Don't send class-variables to a method.
+        cost_func , params = self.cost_func
+        self.gradient = self.cost_func(self.X, self.y, self.theta, *params) # temporary? We must have the ability to change cost-function. Don't send class-variables to a method.
         self.change = self._advance()
         self.theta -= self.change
-
-
-    def _MSE_gradient(self, X, y, theta): # should perhaps be default, but with option to use another
-        """ 
-        Gradient calculation of the Mean Squared Error for OLS.
-        """
-        return 2/self.n * (X.T @ (X @ theta - y))
 
 
     def _advance(self):
@@ -89,8 +96,8 @@ class StochasticGD(GradientDescent):
         epochs (int): Number of passes through the dataset. Default is 1_000.
         batch_size (int, optional): Size of the mini-batches. Default is 16.
     """
-    def __init__(self, epsilon=0.01, epochs=1000, tol=1e-6, momentum=0.0, batch_size=16):
-        super().__init__(epsilon, epochs, tol, momentum)
+    def __init__(self, epsilon=0.01, epochs=1000, tol=1e-6, momentum=0.0, cost_func=None, batch_size=16):
+        super().__init__(epsilon, epochs, tol, momentum, cost_func)
         self.batch_size = batch_size
 
     def _step(self):
@@ -100,7 +107,8 @@ class StochasticGD(GradientDescent):
             batch_indices = indices[start : start+batch_size]
             Xi, yi = self.X[batch_indices], self.y[batch_indices]
 
-            self.gradient = self._MSE_gradient(Xi, yi, self.theta)
+            cost_func, params = self.cost_func
+            self.gradient = cost_func(Xi, yi, self.theta, *params)
             self.change = self._advance()
             self.theta -= self.change
 
@@ -118,9 +126,10 @@ class AdaGradGD(StochasticGD):
                  epochs=1_000, 
                  tol=1e-6, 
                  momentum=0.0,
+                 cost_func=None,
                  batch_size=16,
                  delta=1e-7):
-        super().__init__(epsilon, epochs, tol, momentum, batch_size)
+        super().__init__(epsilon, epochs, tol, momentum, cost_func, batch_size)
         self.delta = delta
         self.r = 0
 
@@ -142,11 +151,12 @@ class RMSPropGD(StochasticGD):
                  epsilon=0.001, 
                  epochs=1_000, 
                  tol=1e-6, 
-                 momentum=0.0, 
+                 momentum=0.0,
+                 cost_func=None, 
                  batch_size=16,
                  rho=0.9,
                  delta=1e-6):
-        super().__init__(epsilon, epochs, tol, momentum, batch_size)
+        super().__init__(epsilon, epochs, tol, momentum, cost_func, batch_size)
         self.rho = rho
         self.delta = delta
         self.r = 0
@@ -173,11 +183,12 @@ class ADAMGD(StochasticGD):
                  epochs=1_000, 
                  tol=1e-6, 
                  momentum=0.0, 
+                 cost_func=None,
                  batch_size=16,
                  rho1=0.9,
                  rho2 = 0.999,
                  delta=1e-8):
-        super().__init__(epsilon, epochs, tol, momentum, batch_size)
+        super().__init__(epsilon, epochs, tol, momentum, cost_func, batch_size)
         self.rho1 = rho1
         self.rho2 = rho2
         self.delta = delta
@@ -218,7 +229,7 @@ if __name__ == "__main__":
         'batch_size': [16, 32, 64]
     }
 
-    grid_search_gd = GridSearchCV(estimator=ADAMGD(), param_grid=param_grid_gd, cv=3, scoring='neg_mean_squared_error')
+    grid_search_gd = GridSearchCV(estimator=ADAMGD(cost_func=(MSE_Ridge, [0.001])), param_grid=param_grid_gd, cv=3, scoring='neg_mean_squared_error')
     grid_search_gd.fit(X_train, y_train)
 
     # Best parameters and score
