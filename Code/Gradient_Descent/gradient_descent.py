@@ -2,14 +2,15 @@ import numpy as np
 from sklearn.base import BaseEstimator, RegressorMixin
 from sklearn.model_selection import GridSearchCV # må denne være her? ikke i if main?
 
+# Hvor bør vi gi funksjonen derivative? I __init__ eller fit? self.derivative = derivative, der default er self._MSE_gradient
 
-class GradientDescent(BaseEstimator, RegressorMixin):       # arguments add compatibility with scikit-learn framework
+class GradientDescent(BaseEstimator, RegressorMixin):       # Inheritance adds compatibility with scikit-learn framework
     """
     Class that implements Gradient Descent with or without momentum.
     
     Attributes
     ----------
-        epsilon (float): Learning rate.
+        epsilon (float, optional): Learning rate. Default is 0.01.
         epochs (int, optional): Maximum number of iterations. Default is 1_000.
         tol (float, optional): Tolerance for stopping criteria. Default is 1e-6.
         momentum (float, optional): Momentum term for gradient update. Default is 0.
@@ -36,30 +37,30 @@ class GradientDescent(BaseEstimator, RegressorMixin):       # arguments add comp
         tol = self.tol
         self.change = 2*tol # ~0
         self.theta = .1*np.random.randn(p) # Initial guess, range ~[-1,1] (perhaps very bad guess for unscaled data)
-        self.indices = np.arange(self.n) # For SGD - this is technically wasted memory for non-SGD-methods (but it is cleaner with only one fit-method, and we'll always use SGD)
+        self.indices = np.arange(self.n) # For SGD
 
         epoch = 0
         epochs = self.epochs
-        while epoch < epochs and np.mean(np.abs(self.change)) > tol: # perhaps we should also add option to specify different stopping criterion.
-            self._step()
+        while epoch < epochs and np.mean(np.abs(self.change)) > tol: # perhaps we should also add option to specify different stopping criteria?
+            self._step(X,y)
             epoch += 1
         return self.theta, epoch
 
 
-    def _step(self):
+    def _step(self, X, y):
         self.gradient = self._MSE_gradient(X, y, self.theta) # temporary? We must have the ability to change cost-function. Don't send class-variables to a method.
         self.change = self._advance()
         self.theta -= self.change
 
 
-    def _MSE_gradient(self, X, y, theta): # should perhaps be default, but with option to use another
+    def _MSE_gradient(self, X, y, theta): # should perhaps be default, but with option to use another.
         """ 
         Gradient calculation of the Mean Squared Error for OLS.
         """
-        return 2/self.n * (X.T @ (X @ theta - y))
+        return 2/len(y) * (X.T @ (X @ theta - y))
 
 
-    def _advance(self):
+    def _advance(self): # burde kanskje hete "_change", siden den finner self.change. Så kan _step hete _advance, f.eks.
         """
         Advances one step in the gradient descent algorithm.
 
@@ -95,7 +96,7 @@ class StochasticGD(GradientDescent):
     def _step(self):
         indices = np.random.permutation(self.indices)
         batch_size = self.batch_size
-        for start in range(0, n, batch_size):
+        for start in range(0, self.n, batch_size):
             batch_indices = indices[start : start+batch_size]
             Xi, yi = X[batch_indices], y[batch_indices]
 
@@ -193,6 +194,9 @@ class ADAMGD(StochasticGD):
         r_hat = self.r/(1 - self.rho2**self.t)
 
         return self.epsilon * s_hat/np.sqrt(r_hat) + self.delta
+
+
+
 
 
 if __name__ == "__main__":
