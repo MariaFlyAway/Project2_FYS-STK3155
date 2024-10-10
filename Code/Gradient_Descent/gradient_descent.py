@@ -8,7 +8,7 @@ def MSE_OLS(X, y, theta):
 
 def MSE_Ridge(X, y, theta, llambda):
     return 2/len(y) * X.T @ (X @ (theta) - y) + 2*llambda*theta
-
+  
 
 class GradientDescent(BaseEstimator, RegressorMixin):       # Inheritance adds compatibility with scikit-learn framework
     """
@@ -23,6 +23,7 @@ class GradientDescent(BaseEstimator, RegressorMixin):       # Inheritance adds c
         cost_gradient (touple, optional): Callable cost function gradient with a list of its parameters. Default is OLS MSE.
     """
     def __init__(self, epsilon=0.01, epochs=1_000, tol=1e-6, momentum=0.0, cost_gradient=None):
+
         self.epsilon = epsilon
         self.epochs = epochs
         self.tol = tol
@@ -63,7 +64,7 @@ class GradientDescent(BaseEstimator, RegressorMixin):       # Inheritance adds c
         self.gradient = cost_gradient(X, y, self.theta, *params) 
         self.change = self._advance()
         self.theta -= self.change
-
+       
 
     def _advance(self): # burde kanskje hete "_change", siden den finner self.change. Så kan _step hete _advance, f.eks.
         """
@@ -85,6 +86,7 @@ class GradientDescent(BaseEstimator, RegressorMixin):       # Inheritance adds c
         return X @ self.theta
 
 
+
 class StochasticGD(GradientDescent):
     """
     Class for implementing Stochastic Gradient Descent.
@@ -99,6 +101,7 @@ class StochasticGD(GradientDescent):
         self.batch_size = batch_size
 
     def _step(self, X, y):
+
         indices = np.random.permutation(self.indices)
         batch_size = self.batch_size
         for start in range(0, self.n, batch_size):
@@ -107,10 +110,12 @@ class StochasticGD(GradientDescent):
 
             cost_gradient, params = self.cost_gradient
             self.gradient = cost_gradient(Xi, yi, self.theta, *params)
+
             self.change = self._advance()
             self.theta -= self.change
 
 
+            
 class AdaGradGD(StochasticGD):
     """
     Implements the AdaGrad optimization algorithm.
@@ -204,6 +209,8 @@ class ADAMGD(StochasticGD):
 
         return self.epsilon * s_hat/np.sqrt(r_hat) + self.delta
 
+
+
 if __name__ == "__main__":
     from sklearn.model_selection import train_test_split, GridSearchCV
     from sklearn.metrics import mean_squared_error
@@ -240,3 +247,4 @@ if __name__ == "__main__":
     # y_pred_gd = best_gd_model.predict(X_test)
     
     # print("MSE for best GradientDescent model:", mean_squared_error(y_test, y_pred_gd))
+
