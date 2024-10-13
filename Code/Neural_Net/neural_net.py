@@ -22,42 +22,97 @@ def softmax_vec(z):
     e_z = np.exp(z - np.max(z))
     return e_z / np.sum(e_z)
 
+# Defining cost functions
+def cross_entropy(predict, target):
+    return np.sum(-target * np.log(predict))
 
-class NeuralNet:
-    def __init__(self, n_features, n_hidden, n_classes, random_state):
-        """Initializes the weights and the bias"""
-        # self.n_features = n_features
-        # self.n_hidden = n_hidden
-        # self.n_classes = n_classes
+
+class NeuralNetwork:
+    """
+    Class that implements a neural net with multiple hidden layers of variable size.
+    
+    Attributes
+    ----------
+        X_data (np.ndarray): Input data.
+        y_data (np.ndarray): Class labels.
+        n_hidden (list): List with size of each hidden layer.
+        n_classes (int): Number of class labels, output size.
+        activations (list): Activation function for each layer.
+        epochs (int): Number of passes through the dataset. Default is 50.
+        batch_size (int): Size of the mini-batches. Default is 100.
+        epsilon (float): Learning rate. Default is 0.1.
+        llambda (float): Regularization parameter. Default is no regularization.
+    """
+    def __init__(
+            self, 
+            X_data,
+            y_data,
+            n_hidden, 
+            n_classes, 
+            activations,
+            epochs=50,
+            batch_size=100,
+            epsilon=0.1,
+            llambda=0.0):
+
+        self.X_data = X_data
+        self.y_data = y_data
+
+        self.n_inputs = X_data.shape[0]
+        self.n_features = X_data.shape[1]
+        self.n_hidden = n_hidden
+        self.n_classes = n_classes
+        self.activations = activations
+
+        self.epochs = epochs
+        self.batch_size = batch_size
+        self.iterations = self.n_inputs // self.batch_size
+        self.epsilon = epsilon
+        self.llambda = llambda
+
+        self._create_layers_batch(self.n_features, n_hidden)
+
+
+    def _create_layers_batch(self, network_input_size, layer_output_sizes):
+        """
+        Initializes the matrix of weights and biases
+
+        Returns:
+            list: Weights and biases for each layer.
+        """
+        layers = []
+
+        i_size = network_input_size
+        for layer_output_size in layer_output_sizes:
+            W = np.random.randn(i_size, layer_output_size)
+            b = np.random.randn(layer_output_size)
+            layers.append((W, b))
+
+            i_size = layer_output_size
+        return layers
+    
+
+    def _activation(self, activation_func):
+        """
+        Currently a placeholder, outputs the sigmoid function, 
+        want to implement multiple forms of activation functions
         
-        # hidden layer
-        rng = np.random.RandomState(random_state)
-        
-        self.weight_h = rng.normal(
-            loc=0.0, scale=0.1, size=(n_hidden, n_features))
-        self.bias_h = np.zeros(n_hidden)
-        
-        # output
-        self.weight_out = rng.normal(
-            loc=0.0, scale=0.1, size=(n_classes, n_hidden))
-        self.bias_out = np.zeros(n_classes)
-
-    def _activation(self, z):
-        """Currently a placeholder, outputs the sigmoid function, 
-        want to implement multiple forms of activation functions"""
-        return 1.0/(1.0+np.exp(-z))
+        Returns:
+            The desired activation function
+        """
+        return activation_func
 
 
-    def forwardpropagation(self, X):
-        """Updates the weights in the forward direcion"""
-        # hidden layer
-        z_h = np.matmul(X, self.weight_h) + self.bias_h
-        a_h = self._activation(z_h)
-
-        # output layer
-        z_out = np.matmul(a_h, self.weight_out) + self.bias_out
-        a_out = self._activation(z_out)
-        return a_h, a_out
+    def forwardpropagation(self, inputs, layers, activations):
+        a = inputs
+        for (W, b), activation in zip(layers, activations):
+            z = np.dot(a, W) + b
+            a = activation(z)
+        return a
+    
+    def cost(self, input, layers, activations, target):
+        predict = self.forwardpropagation(input, layers, activations)
+        return cross_entropy(predict, target)
 
     def backpropagation(self, X, y):
         """Updates the weights in the backwards direction"""
@@ -81,3 +136,16 @@ class NeuralNet:
                 output_bias_gradient, 
                 hidden_weights_gradient, 
                 hidden_bias_gradient)
+    
+    def train_network(
+        self, inputs, layers, activations, targets, learning_rate=0.001, epochs=100
+    ):
+        for i in range(epochs):
+            layers_grad = gradient_func(inputs, layers, activations, targets)
+
+            for (W, b), (W_g, b_g) in zip(layers, layers_grad):
+                W -= learning_rate * W_g
+                b -= learning_rate * b_g
+
+        predict = self.forwardpropagation(input, layers, activations)
+        return predict
