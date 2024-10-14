@@ -56,8 +56,8 @@ class NeuralNetwork:
             batch_size=100,
             epsilon=0.1):
 
-        self.X_data = X_data
-        self.y_data = y_data
+        self.X_data_full = X_data
+        self.y_data_full = y_data
 
         self.n_inputs = X_data.shape[0]
         self.n_features = X_data.shape[1]
@@ -95,7 +95,7 @@ class NeuralNetwork:
     
 
     def cost(self, input, layers, activations, target):
-        predict = self.forwardpropagation()
+        predict = self.forwardpropagation(input)
         return self.cost_func(predict, target)
     
     # def _activation(self, activation_func):
@@ -109,20 +109,7 @@ class NeuralNetwork:
     #     return activation_func
 
 
-    def forwardpropagation(self):
-        """
-        ~Propagates through the neural net
-
-        Returns:
-            a (np.ndarray): The output of the layer
-        """
-        a = self.X_data
-        for (W, b), activation in zip(self.layers, self.activations):
-            z = np.dot(a, W) + b
-            a = activation(z)
-        return a
-    
-    def feed_forward_out(self, X):
+    def forwardpropagation(self, X):
         """
         ~Propagates through the neural net
 
@@ -135,21 +122,25 @@ class NeuralNetwork:
             a = activation(z)
         return a
     
-    def backpropagation(self):
+    def backpropagation(self, X, y):
         gradient_func = grad(self.cost, 1)      # Taking the gradient wrt. the second input to the cost function
-        layers_grad = gradient_func(self.X_data, self.layers, self.activations, self.y_data)
+        layers_grad = gradient_func(X, self.layers, self.activations, y)
 
+        new_layers = []
         for (W, b), (W_g, b_g) in zip(self.layers, layers_grad):
             W -= self.epsilon * W_g
             b -= self.epsilon * b_g
+            new_layers.append((W, b))
+        
+        self.layers = new_layers
 
     
     def predict(self, X):
-        probabilities = self.feed_forward_out(X)
-        return probabilities #np.argmax(probabilities, axis=1)
+        probabilities = self.forwardpropagation(X)
+        return np.argmax(probabilities, axis=1)
     
     def predict_probabilities(self, X):
-        probabilities = self.feed_forward_out(X)
+        probabilities = self.forwardpropagation(X)
         return probabilities
     
     def train_network(self):
@@ -161,10 +152,10 @@ class NeuralNetwork:
                 )
 
                 # minibatch training
-                self.Xi, self.yi = self.X_data[chosen_datapoints], self.y_data[chosen_datapoints]
+                self.X_data, self.y_data = self.X_data_full[chosen_datapoints], self.y_data_full[chosen_datapoints]
 
-                self.forwardpropagation()
-                self.backpropagation()
+                self.forwardpropagation(self.X_data)
+                self.backpropagation(self.X_data, self.y_data)
 
 
 if __name__ == "__main__":
@@ -181,14 +172,6 @@ if __name__ == "__main__":
             targets[i, t] = 1
         return targets
 
-
-    def accuracy(predictions, targets):
-        one_hot_predictions = np.zeros(predictions.shape)
-
-        for i, prediction in enumerate(predictions):
-            one_hot_predictions[i, np.argmax(prediction)] = 1
-        return accuracy_score(one_hot_predictions, targets)
-
     iris = datasets.load_iris()
 
     _, ax = plt.subplots()
@@ -197,6 +180,7 @@ if __name__ == "__main__":
     _ = ax.legend(
         scatter.legend_elements()[0], iris.target_names, loc="lower right", title="Classes"
     )
+    plt.show()
 
     inputs = iris.data
     targets = one_hot_encoder(iris.target)
@@ -219,8 +203,11 @@ if __name__ == "__main__":
     dnn.train_network()
     test_predict = dnn.predict(X_test)
 
+    y_test_one_hot = one_hot_encoder(y_test)
+    test_predict_one_hot = one_hot_encoder(test_predict)
+
     # accuracy score from scikit library
-    print("Accuracy score on test set: ", accuracy(test_predict, one_hot_encoder(y_test)))
+    print("Accuracy score on test set: ", accuracy_score(y_test_one_hot, test_predict_one_hot))
 
     # equivalent in numpy
     # def accuracy_score_numpy(Y_test, Y_pred):
