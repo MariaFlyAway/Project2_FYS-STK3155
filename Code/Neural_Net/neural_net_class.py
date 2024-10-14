@@ -39,7 +39,7 @@ class NeuralNet:
             n_classes, 
             activations,
             cost_func=cross_entropy,
-            epochs=100,
+            epochs=1000,
             batch_size=100,
             epsilon=0.001):
 
@@ -72,8 +72,15 @@ class NeuralNet:
 
             i_size = layer_output_size
         return layers
+    
+    def feed_forward_out(self, X, layers):
+        a = X
+        for (W, b), activation in zip(layers, self.activations):
+            z = np.dot(a, W) + b
+            a = activation(z)
+        return a
 
-    def feed_forward_batch(self, layers):
+    def forwardpropagation(self, layers):
         a = self.X_data_full
         for (W, b), activation in zip(layers, self.activations):
             z = np.dot(a, W) + b
@@ -81,7 +88,7 @@ class NeuralNet:
         return a
 
     def cost(self, layers):
-        predict = self.feed_forward_batch(layers)
+        predict = self.forwardpropagation(layers)
         return cross_entropy(predict, self.y_data_full)
     
     def backpropagation(self):
@@ -91,10 +98,24 @@ class NeuralNet:
             W -= self.epsilon * W_g
             b -= self.epsilon * b_g
 
+    def predict(self, X):
+        probabilities = self.feed_forward_out(X, self.layers)
+        return np.argmax(probabilities, axis=1)
+    
+    def predict_probabilities(self, X):
+        probabilities = self.feed_forward_out(X, self.layers)
+        return probabilities
+
     def train_network(self):
         self.gradient_func = grad(self.cost, 0) 
         for i in range(self.epochs):
+            self.forwardpropagation(self.layers)
             self.backpropagation()
+
+            if i % 10 == 0:  # Print accuracy every 10 epochs
+                predictions = self.forwardpropagation(self.layers)
+                acc = accuracy(predictions, self.y_data_full)
+                print(f"Epoch {i}: Accuracy = {acc}")
 
 if __name__ == "__main__":
     iris = datasets.load_iris()
@@ -122,6 +143,6 @@ if __name__ == "__main__":
 
     nn.train_network()
 
-    predictions = nn.feed_forward_batch(nn.layers)
+    predictions = nn.predict_probabilities(inputs)
 
     print(accuracy(predictions, targets))
