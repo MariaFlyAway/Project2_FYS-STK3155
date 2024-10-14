@@ -97,32 +97,9 @@ class NeuralNetwork:
     def cost(self, input, layers, activations, target):
         predict = self.forwardpropagation()
         return self.cost_func(predict, target)
-    
-    # def _activation(self, activation_func):
-    #     """
-    #     Currently a placeholder, outputs the sigmoid function, 
-    #     want to implement multiple forms of activation functions
-        
-    #     Returns:
-    #         The desired activation function
-    #     """
-    #     return activation_func
 
 
-    def forwardpropagation(self):
-        """
-        ~Propagates through the neural net
-
-        Returns:
-            a (np.ndarray): The output of the layer
-        """
-        a = self.X_data
-        for (W, b), activation in zip(self.layers, self.activations):
-            z = np.dot(a, W) + b
-            a = activation(z)
-        return a
-    
-    def feed_forward_out(self, X):
+    def forwardpropagation(self, X):
         """
         ~Propagates through the neural net
 
@@ -144,9 +121,9 @@ class NeuralNetwork:
             b -= self.epsilon * b_g
 
     
-    def predict(self, X):
-        probabilities = self.feed_forward_out(X)
-        return probabilities #np.argmax(probabilities, axis=1)
+    # def predict(self, X):
+    #     probabilities = self.feed_forward_out(X)
+    #     return probabilities #np.argmax(probabilities, axis=1)
     
     def predict_probabilities(self, X):
         probabilities = self.feed_forward_out(X)
@@ -217,7 +194,7 @@ if __name__ == "__main__":
     dnn = NeuralNetwork(inputs, targets, epochs=epochs, batch_size=batch_size,
                         n_hidden=layer_output_sizes, n_classes=layer_output_sizes[-1], activations=activations)
     dnn.train_network()
-    test_predict = dnn.predict(X_test)
+    test_predict = dnn.predict_probabilities(X_test)
 
     # accuracy score from scikit library
     print("Accuracy score on test set: ", accuracy(test_predict, one_hot_encoder(y_test)))
