@@ -32,6 +32,15 @@ def softmax_vec(z):
 def cross_entropy(predict, target):
     return np.sum(-target * np.log(predict))
 
+
+# calculating the accuracy
+def accuracy(predictions, targets):
+    one_hot_predictions = np.zeros(predictions.shape)
+
+    for i, prediction in enumerate(predictions):
+        one_hot_predictions[i, np.argmax(prediction)] = 1
+    return accuracy_score(one_hot_predictions, targets)
+
 class NeuralNet:
     """
     Class that implements a neural net with multiple hidden layers of variable size.
@@ -150,13 +159,6 @@ if __name__ == "__main__":
             targets[i, t] = 1
 
         return targets
-
-    def accuracy(predictions, targets):
-        one_hot_predictions = np.zeros(predictions.shape)
-
-        for i, prediction in enumerate(predictions):
-            one_hot_predictions[i, np.argmax(prediction)] = 1
-        return accuracy_score(one_hot_predictions, targets)
     
     X_train, X_test, y_train, y_test = train_test_split(inputs, iris.target, test_size=0.001, random_state=3)
     
