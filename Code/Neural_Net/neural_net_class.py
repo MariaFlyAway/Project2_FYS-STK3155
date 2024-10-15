@@ -32,14 +32,27 @@ def cross_entropy(predict, target):
     return np.sum(-target * np.log(predict))
 
 class NeuralNet:
+    """
+    Class that implements a neural net with multiple hidden layers of variable size.
+    
+    Attributes
+    ----------
+        X_data (np.ndarray): Input data.
+        y_data (np.ndarray): Class labels.
+        n_hidden (list): List with size of each hidden layer. Last element of n_hidden is the number of outputs/classes.
+        activations (list): Activation function for each layer.
+        cost_func (Callable): Function used to calculate the loss. Default is cross_entropy.
+        epochs (int): Number of passes through the dataset. Default is 50.
+        batch_size (int): Size of the mini-batches. Default is 100.
+        epsilon (float): Learning rate. Default is 0.1.
+    """
     def __init__(self, 
             X_data,
             y_data,
             n_hidden, 
-            n_classes, 
             activations,
             cost_func=cross_entropy,
-            epochs=1000,
+            epochs=100,
             batch_size=100,
             epsilon=0.001):
 
@@ -49,7 +62,7 @@ class NeuralNet:
         self.n_inputs = X_data.shape[0]
         self.n_features = X_data.shape[1]
         self.n_hidden = n_hidden
-        self.n_classes = n_classes
+        self.n_classes = n_hidden[-1]
         self.activations = activations
 
         self.cost_func = cost_func
@@ -81,7 +94,7 @@ class NeuralNet:
         return a
 
     def forwardpropagation(self, layers):
-        a = self.X_data_full
+        a = self.X_data
         for (W, b), activation in zip(layers, self.activations):
             z = np.dot(a, W) + b
             a = activation(z)
@@ -89,7 +102,7 @@ class NeuralNet:
 
     def cost(self, layers):
         predict = self.forwardpropagation(layers)
-        return cross_entropy(predict, self.y_data_full)
+        return cross_entropy(predict, self.y_data)
     
     def backpropagation(self):
         layers_grad = self.gradient_func(self.layers)
@@ -107,13 +120,21 @@ class NeuralNet:
         return probabilities
 
     def train_network(self):
+        data_indices = np.arange(self.n_inputs)
         self.gradient_func = grad(self.cost, 0) 
         for i in range(self.epochs):
-            self.forwardpropagation(self.layers)
-            self.backpropagation()
+            for iter in range(self.iterations):
+                chosen_datapoints = np.random.choice(
+                    data_indices, size=self.batch_size, replace=False
+                )
 
+                # minibatch training
+                self.X_data, self.y_data = self.X_data_full[chosen_datapoints], self.y_data_full[chosen_datapoints]
+
+                self.backpropagation()
+            
             if i % 10 == 0:  # Print accuracy every 10 epochs
-                predictions = self.forwardpropagation(self.layers)
+                predictions = self.feed_forward_out(self.X_data_full, self.layers)
                 acc = accuracy(predictions, self.y_data_full)
                 print(f"Epoch {i}: Accuracy = {acc}")
 
@@ -139,7 +160,7 @@ if __name__ == "__main__":
     network_input_size = 4
     layer_output_sizes = [8, 3]
     activations = [sigmoid, softmax]
-    nn = NeuralNet(inputs, targets, layer_output_sizes, layer_output_sizes[-1], activations)
+    nn = NeuralNet(inputs, targets, layer_output_sizes, activations)
 
     nn.train_network()
 
