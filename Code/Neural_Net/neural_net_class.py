@@ -2,6 +2,7 @@ import autograd.numpy as np  # We need to use this numpy wrapper to make automat
 from sklearn import datasets
 from sklearn.metrics import accuracy_score
 from autograd import grad
+from sklearn.model_selection import train_test_split
 
 np.random.seed(2024)
 
@@ -42,9 +43,9 @@ class NeuralNet:
         n_hidden (list): List with size of each hidden layer. Last element of n_hidden is the number of outputs/classes.
         activations (list): Activation function for each layer.
         cost_func (Callable): Function used to calculate the loss. Default is cross_entropy.
-        epochs (int): Number of passes through the dataset. Default is 50.
+        epochs (int): Number of passes through the dataset. Default is 1000.
         batch_size (int): Size of the mini-batches. Default is 100.
-        epsilon (float): Learning rate. Default is 0.1.
+        epsilon (float): Learning rate. Default is 0.001.
     """
     def __init__(self, 
             X_data,
@@ -52,7 +53,7 @@ class NeuralNet:
             n_hidden, 
             activations,
             cost_func=cross_entropy,
-            epochs=100,
+            epochs=1000,
             batch_size=100,
             epsilon=0.001):
 
@@ -104,7 +105,7 @@ class NeuralNet:
         predict = self.forwardpropagation(layers)
         return cross_entropy(predict, self.y_data)
     
-    def backpropagation(self):
+    def gradient_descent(self):
         layers_grad = self.gradient_func(self.layers)
 
         for (W, b), (W_g, b_g) in zip(self.layers, layers_grad):
@@ -131,9 +132,9 @@ class NeuralNet:
                 # minibatch training
                 self.X_data, self.y_data = self.X_data_full[chosen_datapoints], self.y_data_full[chosen_datapoints]
 
-                self.backpropagation()
+                self.gradient_descent()
             
-            if i % 10 == 0:  # Print accuracy every 10 epochs
+            if i % 100 == 0:  # Print accuracy every 10 epochs
                 predictions = self.feed_forward_out(self.X_data_full, self.layers)
                 acc = accuracy(predictions, self.y_data_full)
                 print(f"Epoch {i}: Accuracy = {acc}")
@@ -143,12 +144,12 @@ if __name__ == "__main__":
 
     inputs = iris.data
 
-    # Since each prediction is a vector with a score for each of the three types of flowers,
-    # we need to make each target a vector with a 1 for the correct flower and a 0 for the others.
-    targets = np.zeros((len(iris.data), 3))
-    for i, t in enumerate(iris.target):
-        targets[i, t] = 1
+    def one_hot_encoder(input):
+        targets = np.zeros((len(input), 3))     # temporary hardcoding
+        for i, t in enumerate(input):
+            targets[i, t] = 1
 
+        return targets
 
     def accuracy(predictions, targets):
         one_hot_predictions = np.zeros(predictions.shape)
@@ -157,13 +158,17 @@ if __name__ == "__main__":
             one_hot_predictions[i, np.argmax(prediction)] = 1
         return accuracy_score(one_hot_predictions, targets)
     
+    X_train, X_test, y_train, y_test = train_test_split(inputs, iris.target, test_size=0.001, random_state=3)
+    
     network_input_size = 4
     layer_output_sizes = [8, 3]
     activations = [sigmoid, softmax]
-    nn = NeuralNet(inputs, targets, layer_output_sizes, activations)
 
+    nn = NeuralNet(X_train, one_hot_encoder(y_train), layer_output_sizes, activations)
     nn.train_network()
-
-    predictions = nn.predict_probabilities(inputs)
-
-    print(accuracy(predictions, targets))
+    #predictions = nn.predict_probabilities(X_test)
+    #y_test_one_hot = one_hot_encoder(y_test)
+    predictions_train = nn.predict_probabilities(X_train)
+    y_train_one_hot = one_hot_encoder(y_train)
+    print(f'Train accuracy: {accuracy(predictions_train, y_train_one_hot)}')
+    #print(f'Test accuracy: {accuracy(predictions, y_test_one_hot)}')
