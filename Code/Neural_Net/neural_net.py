@@ -2,7 +2,10 @@ import autograd.numpy as np  # We need to use this numpy wrapper to make automat
 from sklearn import datasets
 from sklearn.metrics import accuracy_score
 from autograd import grad
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, GridSearchCV, KFold
+from sklearn.base import BaseEstimator, RegressorMixin, ClassifierMixin
+
+from sklearn.pipeline import Pipeline
 
 np.random.seed(2024)
 
@@ -55,11 +58,11 @@ def one_hot_encoder(input, labels):
     return targets
 
 
-class NeuralNet:
+class NeuralNet(ClassifierMixin, RegressorMixin, BaseEstimator):
     """
     Class that implements a neural net with multiple hidden layers of variable size.
     
-    Attributes
+    Parameters
     ----------
         n_hidden (list): List with size of each hidden layer. Last element of n_hidden is the number of outputs/classes.
         activations (list): Activation function for each layer.
@@ -69,9 +72,9 @@ class NeuralNet:
         epsilon (float): Learning rate. Default is 0.001.
     """
     def __init__(self, 
-            n_features,
-            n_hidden, 
-            activations,
+            n_features=1,
+            n_hidden=[1], 
+            activations=[identity_func],
             loss_fn='cross_entropy',
             epochs=1000,
             batch_size=100,
@@ -79,15 +82,12 @@ class NeuralNet:
 
         self.n_features = n_features
         self.n_hidden = n_hidden
-        self.n_classes = n_hidden[-1]
         self.activations = activations
+        self.loss_fn = loss_fn
         self.epochs = epochs
         self.batch_size = batch_size
         self.epsilon = epsilon
-
-        self.loss_func = self._get_loss_func(loss_fn)
-        self.layers = self._create_layers_batch()
-
+        
     def _get_loss_func(self, loss_type):
         loss_funcs = {'cross_entropy': cross_entropy,
                       'mse': mean_squared_error_loss}
@@ -125,6 +125,11 @@ class NeuralNet:
         return a
 
     def fit(self, X, y):
+        self.classes_ = np.unique(y)
+        self.loss_func = self._get_loss_func(self.loss_fn)
+        self.layers = self._create_layers_batch()
+        y_one_hot = one_hot_encoder(y, len(self.classes_))
+
         self.indices = np.arange(X.shape[0])
         indices = np.random.permutation(self.indices)
         self.gradient_func = grad(self.cost, 1) 
@@ -132,26 +137,35 @@ class NeuralNet:
         for i in range(self.epochs):
             for start in range(0, X.shape[0], batch_size):
                 batch_indices = indices[start : start+batch_size]
-                Xi, yi = X[batch_indices], y[batch_indices]
+                Xi, yi = X[batch_indices], y_one_hot[batch_indices]
 
                 self.gradient_descent(Xi, yi)
             
             # Print accuracy every 100 epochs
             if i % 100 == 0:  
-                predictions = self.forwardpropagation(X, self.layers)
+                predictions = self.predict(X)
                 if self.loss_func == cross_entropy:
-                    acc = accuracy(predictions, y)
+                    acc = accuracy_score(y, predictions)
                     print(f"Epoch {i}: Accuracy = {acc}")
                 else:
                     print(f"Epoch {i}: MSE = {mean_squared_error_loss(y, predictions)}")
 
+        return self
+
 
     def predict(self, X):
+        probabilities = self.forwardpropagation(X, self.layers)
+        if self.loss_fn == 'cross_entropy':
+            return np.argmax(probabilities, axis=-1)
+        else:
+            return probabilities
+        
+    def predict_proba(self, X):
         return self.forwardpropagation(X, self.layers)
     
     def score(self, X, y):
-        one_hot_labels = one_hot_encoder(y, self.n_classes)
-        return accuracy(self.predict(X), one_hot_labels)
+        predictions = self.predict(X)
+        return accuracy_score(y, predictions)
                     
 
 if __name__ == "__main__":
@@ -166,13 +180,33 @@ if __name__ == "__main__":
     activations = [sigmoid, softmax]
 
     nn = NeuralNet(network_input_size, layer_output_sizes, activations)
-    nn.fit(X_train, one_hot_encoder(y_train, 3))
+    nn.fit(X_train, y_train)
 
     predictions_train = nn.predict(X_train)
     predictions_test = nn.predict(X_test)
     y_train_one_hot = one_hot_encoder(y_train, 3)
     y_test_one_hot = one_hot_encoder(y_test, 3)
-    print(f'Train accuracy: {accuracy(predictions_train, y_train_one_hot)}')
-    print(f'Test accuracy: {accuracy(predictions_test, y_test_one_hot)}')
+    print(f'Train accuracy: {accuracy_score(y_train, predictions_train)}')
+    print(f'Test accuracy: {accuracy_score(y_test, predictions_test)}')
 
     print(nn.score(X_test, y_test))
+
+
+    k_folds = KFold(n_splits=10)
+
+    pipeline = Pipeline([
+        ('model', NeuralNet(network_input_size, layer_output_sizes, activations, batch_size=10, epochs=100))
+    ])
+    param_grid = {
+        'model__epsilon': np.logspace(-4, -1, 4),
+    }
+
+    grid_search = GridSearchCV(estimator=pipeline,
+                    param_grid=param_grid,
+                    scoring='accuracy',
+                    cv=k_folds,
+                    verbose=1,
+                    n_jobs=1)
+    gs = grid_search.fit(X_train, y_train)
+    print(-gs.best_score_)
+    print(gs.best_params_)
