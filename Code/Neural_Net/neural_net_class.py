@@ -7,9 +7,6 @@ from sklearn.model_selection import train_test_split
 np.random.seed(2024)
 
 # Defining some activation functions
-def identity_func(z):
-    return z
-
 def ReLU(z):
     return np.where(z > 0, z, 0)
 
@@ -35,8 +32,6 @@ def softmax_vec(z):
 def cross_entropy(predict, target):
     return np.sum(-target * np.log(predict))
 
-def mean_squared_error_loss(predict, target):
-    return np.mean((predict - target) ** 2)
 
 # calculating the accuracy
 def accuracy(predictions, targets):
@@ -66,7 +61,7 @@ class NeuralNet:
             y_data,
             n_hidden, 
             activations,
-            loss_fn='cross_entropy',
+            cost_func=cross_entropy,
             epochs=1000,
             batch_size=100,
             epsilon=0.001):
@@ -79,19 +74,15 @@ class NeuralNet:
         self.n_hidden = n_hidden
         self.n_classes = n_hidden[-1]
         self.activations = activations
+
+        self.cost_func = cost_func
+
         self.epochs = epochs
         self.batch_size = batch_size
         self.iterations = self.n_inputs // self.batch_size
         self.epsilon = epsilon
 
-        self.loss_func = self._get_loss_func(loss_fn)
         self.layers = self._create_layers_batch()
-
-    def _get_loss_func(self, loss_type):
-        loss_funcs = {'cross_entropy': cross_entropy,
-                      'mse': mean_squared_error_loss}
-        
-        return loss_funcs[loss_type]
 
     def _create_layers_batch(self):
         layers = []
@@ -121,7 +112,7 @@ class NeuralNet:
 
     def cost(self, layers):
         predict = self.forwardpropagation(layers)
-        return self.loss_func(predict, self.y_data)
+        return cross_entropy(predict, self.y_data)
     
     def gradient_descent(self):
         layers_grad = self.gradient_func(self.layers)
@@ -135,7 +126,8 @@ class NeuralNet:
         return np.argmax(probabilities, axis=1)
     
     def predict_probabilities(self, X):
-        return self.feed_forward_out(X, self.layers)
+        probabilities = self.feed_forward_out(X, self.layers)
+        return probabilities
 
     def train_network(self):
         data_indices = np.arange(self.n_inputs)
@@ -151,15 +143,10 @@ class NeuralNet:
 
                 self.gradient_descent()
             
-            # Print accuracy every 100 epochs
-            if i % 100 == 0:  
+            if i % 100 == 0:  # Print accuracy every 10 epochs
                 predictions = self.feed_forward_out(self.X_data_full, self.layers)
-                if self.loss_func == cross_entropy:
-                    acc = accuracy(predictions, self.y_data_full)
-                    print(f"Epoch {i}: Accuracy = {acc}")
-                else:
-                    print(f"Epoch {i}: MSE = {mean_squared_error_loss(self.y_data_full, predictions)}")
-                
+                acc = accuracy(predictions, self.y_data_full)
+                print(f"Epoch {i}: Accuracy = {acc}")
 
 if __name__ == "__main__":
     iris = datasets.load_iris()
