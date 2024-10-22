@@ -21,9 +21,9 @@ class GradientDescent(BaseEstimator, RegressorMixin):       # Inheritance adds c
         tol (float, optional): Tolerance for stopping criteria. Default is 1e-6.
         momentum (float, optional): Momentum term for gradient update. Default is 0.
         cost_gradient (touple, optional): Callable cost function gradient with a list of its parameters. Default is OLS MSE.
+        batch_size (int, optional): Mini batch size for SGD. If False/0, basic GD is performed. Default is 16.
     """
-    def __init__(self, epsilon=0.01, epochs=1_000, tol=1e-6, momentum=0.0, cost_gradient=None):
-
+    def __init__(self, epsilon=0.01, epochs=1_000, tol=1e-6, momentum=0.0, cost_gradient=None, batch_size=16):
         self.epsilon = epsilon
         self.epochs = epochs
         self.tol = tol
@@ -32,6 +32,7 @@ class GradientDescent(BaseEstimator, RegressorMixin):       # Inheritance adds c
             self.cost_gradient = (MSE_OLS, [])
         else:
             self.cost_gradient = cost_gradient
+        self.batch_size = batch_size
 
 
     def fit(self, X, y):
@@ -49,12 +50,18 @@ class GradientDescent(BaseEstimator, RegressorMixin):       # Inheritance adds c
         tol = self.tol
         self.change = 2*tol # ~0
         self.theta = .1*np.random.randn(p) # Initial guess, range ~[-1,1] (perhaps very bad guess for unscaled data)
-        self.indices = np.arange(self.n) # For SGD
+
+        batch_size = self.batch_size # If SGD
+        if batch_size:
+            self.indices = np.arange(self.n) 
+            step = self._SGD_step
+        else:
+            step = self._step
 
         epoch = 0
         epochs = self.epochs
         while epoch < epochs and np.mean(np.abs(self.change)) > tol: # perhaps we should also add option to specify different stopping criteria?
-            self._step(X,y)
+            step(X,y)
             epoch += 1
         return self.theta, epoch
 
@@ -64,8 +71,22 @@ class GradientDescent(BaseEstimator, RegressorMixin):       # Inheritance adds c
         self.gradient = cost_gradient(X, y, self.theta, *params) 
         self.change = self._advance()
         self.theta -= self.change
-       
 
+
+    def _SGD_step(self, X, y):
+        indices = np.random.permutation(self.indices)
+        batch_size = self.batch_size
+        for start in range(0, self.n, batch_size):
+            batch_indices = indices[start : start+batch_size]
+            Xi, yi = X[batch_indices], y[batch_indices]
+
+            cost_gradient, params = self.cost_gradient
+            self.gradient = cost_gradient(Xi, yi, self.theta, *params)
+
+            self.change = self._advance()
+            self.theta -= self.change
+    
+       
     def _advance(self): # burde kanskje hete "_change", siden den finner self.change. Så kan _step hete _advance, f.eks.
         """
         Advances one step in the gradient descent algorithm.
@@ -85,38 +106,8 @@ class GradientDescent(BaseEstimator, RegressorMixin):       # Inheritance adds c
         """
         return X @ self.theta
 
-
-
-class StochasticGD(GradientDescent):
-    """
-    Class for implementing Stochastic Gradient Descent.
-
-    Attributes
-    ----------
-        epochs (int): Number of passes through the dataset. Default is 1_000.
-        batch_size (int, optional): Size of the mini-batches. Default is 16.
-    """
-    def __init__(self, epsilon=0.01, epochs=1000, tol=1e-6, momentum=0.0, cost_gradient=None, batch_size=16):
-        super().__init__(epsilon, epochs, tol, momentum, cost_gradient)
-        self.batch_size = batch_size
-
-    def _step(self, X, y):
-
-        indices = np.random.permutation(self.indices)
-        batch_size = self.batch_size
-        for start in range(0, self.n, batch_size):
-            batch_indices = indices[start : start+batch_size]
-            Xi, yi = X[batch_indices], y[batch_indices]
-
-            cost_gradient, params = self.cost_gradient
-            self.gradient = cost_gradient(Xi, yi, self.theta, *params)
-
-            self.change = self._advance()
-            self.theta -= self.change
-
-
             
-class AdaGradGD(StochasticGD):
+class AdaGradGD(GradientDescent):
     """
     Implements the AdaGrad optimization algorithm.
 
@@ -137,11 +128,11 @@ class AdaGradGD(StochasticGD):
         self.r = 0
 
     def _advance(self):
-        self.r += self.gradient * self.gradient
-        return self.epsilon/(self.delta + np.sqrt(self.r)) * self.gradient
+        self.r = self.r + self.gradient * self.gradient
+        return self.epsilon/(self.delta + np.sqrt(self.r)) * self.gradient + self.momentum*self.change
 
 
-class RMSPropGD(StochasticGD):
+class RMSPropGD(GradientDescent):
     """
     Implements the RMSProp optimization algorithm.
 
@@ -169,7 +160,7 @@ class RMSPropGD(StochasticGD):
         return self.epsilon*self.gradient / np.sqrt(self.r + self.delta)
         
 
-class ADAMGD(StochasticGD):
+class ADAMGD(GradientDescent):
     """
     Implements the ADAM optimization algorithm.
 
@@ -207,14 +198,12 @@ class ADAMGD(StochasticGD):
         s_hat = self.s/(1 - self.rho1**self.t)
         r_hat = self.r/(1 - self.rho2**self.t)
 
-        return self.epsilon * s_hat/np.sqrt(r_hat) + self.delta
+        return self.epsilon * s_hat/(np.sqrt(r_hat) + self.delta)
 
 
 
 if __name__ == "__main__":
-    from sklearn.model_selection import train_test_split, GridSearchCV
-    from sklearn.metrics import mean_squared_error
-
+    # linear test
     np.random.seed(3)
 
     n = 100
@@ -224,9 +213,85 @@ if __name__ == "__main__":
     p = 2
     X = np.c_[*(x**i for i in range(p+1))]
 
+    basicGD = GradientDescent(epsilon=.1, momentum=.5, batch_size=False)
+    theta, N = basicGD.fit(X,y)
+    print(f"Standard GD (momentum .5): {N} iterations, parameters {theta}")
+
+    SGD = GradientDescent(epsilon=.1, momentum=.5, batch_size=5)
+    theta, N = SGD.fit(X,y)
+    print(f"SGD (momentum .5): {N} epochs, parameters {theta}")
+
+    ADAM = ADAMGD(epsilon=.1)
+    theta, N = ADAM.fit(X,y)
+    print(f"ADAM (eps = .1): {N} epochs, parameters {theta}")
+    print('-'*50) # sep
+ 
+
+
+    # Franke function
+    def FrankeFunction(x,y): # from project description
+        term1 = 0.75*np.exp(-(0.25*(9*x-2)**2) - 0.25*((9*y-2)**2))
+        term2 = 0.75*np.exp(-((9*x+1)**2)/49.0 - 0.1*(9*y+1))
+        term3 = 0.5*np.exp(-(9*x-7)**2/4.0 - 0.25*((9*y-3)**2))
+        term4 = -0.2*np.exp(-(9*x-4)**2 - (9*y-7)**2)
+        return term1 + term2 + term3 + term4
+    
+    def polynomial_matrix_2D(x, y, p, no_intercept=True):
+        """Variables x and y, degree p, returns design matrix"""
+        n = len(x) # number of data points
+        if p == 0: return np.ones((n,1))
+
+        l = int((p+1)*(p+2)/2) # number of elements in beta
+        X = np.zeros((n,l-no_intercept))
+
+        idx = int(not no_intercept)
+        for degree in range(1,p+1):
+            for ydegree in range(degree+1):
+                X[:, idx] = (x**(degree - ydegree)) * (y**ydegree)
+                idx += 1
+            
+        return X
+
+
+    from sklearn.preprocessing import PolynomialFeatures
+    n = 10
+    p = 3
+    x, y = np.linspace(0,1,n), np.linspace(0,1,n)
+    x, y = np.meshgrid(x,y)
+    x,y = x.ravel(), y.ravel()
+    z = FrankeFunction(x,y)
+
+    X = polynomial_matrix_2D(x,y,p)
+    beta = np.linalg.inv(X.T @ X) @ X.T @ z
+    print(beta)
+    H = 2/n * X.T @ X
+    EigVal, EigVec = np.linalg.eig(H) # we will cheat using this to find optimal step
+    learning_rate = 1/np.max(EigVal) # note: H positive definite = positive eigenvalues
+    print(f"The analytical learning rate is about {learning_rate:.5f}")
+
+    basicGD = GradientDescent(epsilon=.1, momentum=.98, epochs=10_000, batch_size=False) # momentum is really important...
+    theta, N = basicGD.fit(X,z)
+    print(f"Standard GD (momentum .5): {N} iterations, parameters {theta}")
+
+    SGD = GradientDescent(epsilon=.8, momentum=.98, batch_size=128, epochs=1500)
+    theta, N = SGD.fit(X,z)
+    print(f"SGD: {N} epochs, parameters {theta}")
+
+    ADAM = AdaGradGD(epsilon=.8, momentum=.98, batch_size=128, epochs=1500)
+    theta, N = ADAM.fit(X,z)
+    print(f"ADAM: {N} epochs, parameters {theta}")
+    print('-'*50) # sep
+
+
     ### Dette gir ikke mening nå når vi avslutter ved en gitt toleranse; da er jo alle like gode MSE-wise. 
     ### Men blir veldig nyttig når vi skal tilpasse ekte data / nevrale nett og kanskje ikke alltid konvergerer i tide!
+
+    # from sklearn.model_selection import train_test_split, GridSearchCV
+    # from sklearn.metrics import mean_squared_error
+
     # X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+
 
     # param_grid_gd = {
     #     'epsilon': [1e-3, 1e-2, 1e-1],
