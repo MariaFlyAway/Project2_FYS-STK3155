@@ -22,11 +22,16 @@ def sigmoid(z):
     return 1 / (1 + np.exp(-z))
 
 
-def softmax(z):
-    """Compute softmax values for each set of scores in the rows of the matrix z.
-    Used with batched input data."""
-    e_z = np.exp(z - np.max(z, axis=1, keepdims=True))
-    return e_z / np.sum(e_z, axis=1, keepdims=True)
+# def softmax(z):
+#     """Compute softmax values for each set of scores in the rows of the matrix z.
+#     Used with batched input data."""
+#     e_z = np.exp(z - np.max(z, axis=1, keepdims=True))
+#     return e_z / np.sum(e_z, axis=1, keepdims=True)
+
+# Define the softmax function
+def softmax(x):
+    exp_x = np.exp(x - np.max(x))  # Subtract max(x) for numerical stability
+    return exp_x / np.sum(exp_x)
 
 
 def softmax_vec(z):
@@ -47,13 +52,11 @@ def ReLU_der(z):
     return np.where(z > 0, 1, 0)
 
 # def softmax_der(z):
-#     s = z.reshape(-1, 1)
-#     return np.diagflat(s) - np.dot(s, s.T)
+#     return egrad(softmax)(z)
 
-def softmax_der_alt(z):
-    derivative = egrad(softmax)
-    print(derivative(z).shape)
-    return derivative(z)
+def softmax_der(z):
+    a = softmax(z)
+    
 
 # Defining the function used for calculating the loss
 def cross_entropy(predict, target):
@@ -64,6 +67,18 @@ def cross_entropy_reg(predict, target, llambda, layers):
 
 def mean_squared_error_loss(predict, target):
     return np.mean((predict - target) ** 2)
+
+def mse_with_l2_penalty(predict, target, layers, llambda):
+    weight_list = []
+    for layer in layers:
+        W, b = layer
+        weight_list.append(W)
+
+    mse_loss = np.mean((predict - target) ** 2)
+    l2_penalty = np.sum([np.sum(W ** 2) for W in weight_list]) * llambda
+    total_loss = mse_loss + l2_penalty
+    
+    return total_loss
 
 
 # defining the derivatives of the loss functions
@@ -90,17 +105,17 @@ def one_hot_encoder(input, labels):
     
     return targets
 
-def softmax_der(z):
-    s = softmax(z)
-    jacobian_m = np.zeros((z.shape[0], z.shape[1], z.shape[1]))
-    for i in range(z.shape[0]):
-        for j in range(z.shape[1]):
-            for k in range(z.shape[1]):
-                if j == k:
-                    jacobian_m[i][j][k] = s[i][j] * (1 - s[i][j])
-                else:
-                    jacobian_m[i][j][k] = -s[i][j] * s[i][k]
-    return jacobian_m
+# def softmax_der(z):
+#     s = softmax(z)
+#     jacobian_m = np.zeros((z.shape[0], z.shape[1], z.shape[1]))
+#     for i in range(z.shape[0]):
+#         for j in range(z.shape[1]):
+#             for k in range(z.shape[1]):
+#                 if j == k:
+#                     jacobian_m[i][j][k] = s[i][j] * (1 - s[i][j])
+#                 else:
+#                     jacobian_m[i][j][k] = -s[i][j] * s[i][k]
+#     return jacobian_m
 
 
 class NeuralNet(ClassifierMixin, RegressorMixin, BaseEstimator):
@@ -123,7 +138,8 @@ class NeuralNet(ClassifierMixin, RegressorMixin, BaseEstimator):
             loss_fn='cross_entropy',
             epochs=1,
             batch_size=100,
-            epsilon=0.001):
+            epsilon=0.001,
+            llambda=0.0):
 
         self.n_features = n_features
         self.n_hidden = n_hidden
@@ -132,6 +148,7 @@ class NeuralNet(ClassifierMixin, RegressorMixin, BaseEstimator):
         self.epochs = epochs
         self.batch_size = batch_size
         self.epsilon = epsilon
+        self.llambda = llambda
 
         self.activation_funcs, self.activation_ders = self._get_act_func(self.activations)
         self.loss_func, self.loss_func_der = self._get_loss_func(self.loss_fn)
@@ -187,8 +204,11 @@ class NeuralNet(ClassifierMixin, RegressorMixin, BaseEstimator):
 
         layer_grads = [() for layer in self.layers]
 
+        j = 0
         for i in reversed(range(len(self.layers))):
             layer_input, z, activation_der = layer_inputs[i], zs[i], self.activation_ders[i]
+
+            Weight, bias = self.layers[j-1]
 
             if i == len(self.layers) - 1:
                 dC_da = self.loss_func_der(predict, y)
@@ -196,17 +216,21 @@ class NeuralNet(ClassifierMixin, RegressorMixin, BaseEstimator):
                 (W, b) = self.layers[i + 1]
                 dC_da = np.dot(dC_dz, W.T)
 
-            if self.activation_funcs[i] == softmax:
-                dC_dz = np.einsum('ij,ijk->ik', dC_da, softmax_der(z))
-                print(dC_dz)
-                print(dC_da * softmax_der_alt(z))
-            else:
-                dC_dz = dC_da * activation_der(z)
+            # if self.activation_funcs[i] == softmax:
+            #     dC_dz = np.einsum('ij,ijk->ik', dC_da, softmax_der(z))
+            #     print(dC_dz)
+            #     print(dC_da * softmax_der_alt(z))
+            # else:
+            dC_dz = dC_da * activation_der(z)
 
             dC_dW = np.dot(layer_input.T, dC_dz)
             dC_db = np.sum(dC_dz, axis=0)
 
+            if self.llambda > 0.0 and i < len(self.layers) - 1:
+                dC_dW += self.llambda * Weight
+
             layer_grads[i] = (dC_dW, dC_db)
+            j += 1
 
         return layer_grads
 
@@ -219,7 +243,7 @@ class NeuralNet(ClassifierMixin, RegressorMixin, BaseEstimator):
             layer_inputs.append(a)
             z = np.dot(a, W) + b
             a = activation_func(z)
-
+            
             zs.append(z)
 
         return layer_inputs, zs, a
@@ -227,7 +251,6 @@ class NeuralNet(ClassifierMixin, RegressorMixin, BaseEstimator):
     def fit(self, X, y):
         self.classes_ = np.unique(y)
         self.layers = self._create_layers_batch()
-        y_one_hot = one_hot_encoder(y, len(self.classes_))
 
         self.indices = np.arange(X.shape[0])
         indices = np.random.permutation(self.indices)
@@ -235,7 +258,7 @@ class NeuralNet(ClassifierMixin, RegressorMixin, BaseEstimator):
         for i in range(self.epochs):
             for start in range(0, X.shape[0], batch_size):
                 batch_indices = indices[start : start+batch_size]
-                Xi, yi = X[batch_indices], y_one_hot[batch_indices]
+                Xi, yi = X[batch_indices], y[batch_indices]
 
                 self.gradient_descent(Xi, yi)
             
@@ -243,7 +266,7 @@ class NeuralNet(ClassifierMixin, RegressorMixin, BaseEstimator):
             if i % 100 == 0:  
                 predictions = self.predict(X)
                 if self.loss_func == cross_entropy:
-                    acc = accuracy_score(y, predictions)
+                    acc = accuracy_score(np.argmax(y, axis=1), predictions)
                     print(f"Epoch {i}: Accuracy = {acc}")
                 else:
                     print(f"Epoch {i}: MSE = {mean_squared_error_loss(y, predictions)}")
@@ -264,7 +287,11 @@ class NeuralNet(ClassifierMixin, RegressorMixin, BaseEstimator):
     
     def score(self, X, y):
         predictions = self.predict(X)
-        return accuracy_score(y, predictions)
+        if self.loss_fn == 'cross_entropy':
+            score = accuracy_score(y, predictions)
+        else:
+            score = mean_squared_error_loss(y, predictions)
+        return score
                     
 
 if __name__ == "__main__":
@@ -276,10 +303,10 @@ if __name__ == "__main__":
     
     network_input_size = 4
     layer_output_sizes = [8, 3]
-    activations = ['sigmoid', 'softmax']
+    activations = ['sigmoid', 'sigmoid']
 
-    nn = NeuralNet(network_input_size, layer_output_sizes, activations, loss_fn='cross_entropy')
-    nn.fit(X_train, y_train)
+    nn = NeuralNet(network_input_size, layer_output_sizes, activations, loss_fn='cross_entropy', llambda=0.1)
+    nn.fit(X_train, one_hot_encoder(y_train, 3))
 
     predictions_train = nn.predict(X_train)
     predictions_test = nn.predict(X_test)

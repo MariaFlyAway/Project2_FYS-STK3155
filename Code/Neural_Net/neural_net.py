@@ -87,7 +87,26 @@ class NeuralNet(ClassifierMixin, RegressorMixin, BaseEstimator):
         self.epochs = epochs
         self.batch_size = batch_size
         self.epsilon = epsilon
+
+        self.activation_funcs = self._get_act_func(self.activations)
+        self.loss_func= self._get_loss_func(self.loss_fn)
         
+        
+    def _get_act_func(self, activation_funcs):
+        """
+        Creates lists of the activation funcs and the derivatives of the activation funcs.
+        """
+        act_func_dict = {'sigmoid': sigmoid, 
+                         'relu': ReLU, 
+                         'softmax': softmax,
+                         'identity': identity_func}
+
+        activations = []
+        for name in activation_funcs:
+            activations.append(act_func_dict[name])
+
+        return activations
+
     def _get_loss_func(self, loss_type):
         loss_funcs = {'cross_entropy': cross_entropy,
                       'mse': mean_squared_error_loss}
@@ -119,7 +138,7 @@ class NeuralNet(ClassifierMixin, RegressorMixin, BaseEstimator):
 
     def forwardpropagation(self, X, layers):
         a = X
-        for (W, b), activation in zip(layers, self.activations):
+        for (W, b), activation in zip(layers, self.activation_funcs):
             z = np.dot(a, W) + b
             a = activation(z)
         return a
@@ -144,9 +163,7 @@ class NeuralNet(ClassifierMixin, RegressorMixin, BaseEstimator):
             if i % 100 == 0:  
                 predictions = self.predict(X)
                 if self.loss_fn == 'cross_entropy':
-                    print(y)
-                    print(predictions)
-                    acc = accuracy_score(y, predictions)
+                    acc = accuracy_score(np.argmax(y, axis=1), predictions)
                     print(f"Epoch {i}: Accuracy = {acc}")
                 else:
                     print(f"Epoch {i}: MSE = {mean_squared_error_loss(y, predictions)}")
@@ -178,10 +195,10 @@ if __name__ == "__main__":
     
     network_input_size = 4
     layer_output_sizes = [8, 3]
-    activations = [sigmoid, softmax]
+    activations = ['sigmoid', 'softmax']
 
-    nn = NeuralNet(network_input_size, layer_output_sizes, activations)
-    nn.fit(X_train, y_train)
+    nn = NeuralNet(network_input_size, layer_output_sizes, activations, epochs=100)
+    nn.fit(X_train, one_hot_encoder(y_train, 3))
 
     predictions_train = nn.predict(X_train)
     predictions_test = nn.predict(X_test)
