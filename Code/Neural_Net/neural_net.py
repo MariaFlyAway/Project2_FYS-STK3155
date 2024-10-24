@@ -76,7 +76,7 @@ class NeuralNet(ClassifierMixin, RegressorMixin, BaseEstimator):
             n_hidden=[1], 
             activations=[identity_func],
             loss_fn='cross_entropy',
-            epochs=1000,
+            epochs=1,
             batch_size=100,
             epsilon=0.001):
 
@@ -87,7 +87,26 @@ class NeuralNet(ClassifierMixin, RegressorMixin, BaseEstimator):
         self.epochs = epochs
         self.batch_size = batch_size
         self.epsilon = epsilon
+
+        self.activation_funcs = self._get_act_func(self.activations)
+        self.loss_func= self._get_loss_func(self.loss_fn)
         
+        
+    def _get_act_func(self, activation_funcs):
+        """
+        Creates lists of the activation funcs and the derivatives of the activation funcs.
+        """
+        act_func_dict = {'sigmoid': sigmoid, 
+                         'relu': ReLU, 
+                         'softmax': softmax,
+                         'identity': identity_func}
+
+        activations = []
+        for name in activation_funcs:
+            activations.append(act_func_dict[name])
+
+        return activations
+
     def _get_loss_func(self, loss_type):
         loss_funcs = {'cross_entropy': cross_entropy,
                       'mse': mean_squared_error_loss}
@@ -119,7 +138,7 @@ class NeuralNet(ClassifierMixin, RegressorMixin, BaseEstimator):
 
     def forwardpropagation(self, X, layers):
         a = X
-        for (W, b), activation in zip(layers, self.activations):
+        for (W, b), activation in zip(layers, self.activation_funcs):
             z = np.dot(a, W) + b
             a = activation(z)
         return a
@@ -128,7 +147,6 @@ class NeuralNet(ClassifierMixin, RegressorMixin, BaseEstimator):
         self.classes_ = np.unique(y)
         self.loss_func = self._get_loss_func(self.loss_fn)
         self.layers = self._create_layers_batch()
-        y_one_hot = one_hot_encoder(y, len(self.classes_))
 
         self.indices = np.arange(X.shape[0])
         indices = np.random.permutation(self.indices)
@@ -137,15 +155,15 @@ class NeuralNet(ClassifierMixin, RegressorMixin, BaseEstimator):
         for i in range(self.epochs):
             for start in range(0, X.shape[0], batch_size):
                 batch_indices = indices[start : start+batch_size]
-                Xi, yi = X[batch_indices], y_one_hot[batch_indices]
+                Xi, yi = X[batch_indices], y[batch_indices]
 
                 self.gradient_descent(Xi, yi)
             
             # Print accuracy every 100 epochs
             if i % 100 == 0:  
                 predictions = self.predict(X)
-                if self.loss_func == cross_entropy:
-                    acc = accuracy_score(y, predictions)
+                if self.loss_fn == 'cross_entropy':
+                    acc = accuracy_score(np.argmax(y, axis=1), predictions)
                     print(f"Epoch {i}: Accuracy = {acc}")
                 else:
                     print(f"Epoch {i}: MSE = {mean_squared_error_loss(y, predictions)}")
@@ -177,10 +195,10 @@ if __name__ == "__main__":
     
     network_input_size = 4
     layer_output_sizes = [8, 3]
-    activations = [sigmoid, softmax]
+    activations = ['sigmoid', 'softmax']
 
-    nn = NeuralNet(network_input_size, layer_output_sizes, activations)
-    nn.fit(X_train, y_train)
+    nn = NeuralNet(network_input_size, layer_output_sizes, activations, epochs=100)
+    nn.fit(X_train, one_hot_encoder(y_train, 3))
 
     predictions_train = nn.predict(X_train)
     predictions_test = nn.predict(X_test)
@@ -192,21 +210,21 @@ if __name__ == "__main__":
     print(nn.score(X_test, y_test))
 
 
-    k_folds = KFold(n_splits=10)
+    # k_folds = KFold(n_splits=10)
 
-    pipeline = Pipeline([
-        ('model', NeuralNet(network_input_size, layer_output_sizes, activations, batch_size=10, epochs=100))
-    ])
-    param_grid = {
-        'model__epsilon': np.logspace(-4, -1, 4),
-    }
+    # pipeline = Pipeline([
+    #     ('model', NeuralNet(network_input_size, layer_output_sizes, activations, batch_size=10, epochs=100))
+    # ])
+    # param_grid = {
+    #     'model__epsilon': np.logspace(-4, -1, 4),
+    # }
 
-    grid_search = GridSearchCV(estimator=pipeline,
-                    param_grid=param_grid,
-                    scoring='accuracy',
-                    cv=k_folds,
-                    verbose=1,
-                    n_jobs=1)
-    gs = grid_search.fit(X_train, y_train)
-    print(-gs.best_score_)
-    print(gs.best_params_)
+    # grid_search = GridSearchCV(estimator=pipeline,
+    #                 param_grid=param_grid,
+    #                 scoring='accuracy',
+    #                 cv=k_folds,
+    #                 verbose=1,
+    #                 n_jobs=1)
+    # gs = grid_search.fit(X_train, y_train)
+    # print(gs.best_score_)
+    # print(gs.best_params_)
