@@ -115,12 +115,18 @@ class NeuralNet(ClassifierMixin, RegressorMixin, BaseEstimator):
     
     Parameters
     ----------
-        n_hidden (list): List with size of each hidden layer. Last element of n_hidden is the number of outputs/classes.
-        activations (list): Activation function for each layer.
-        cost_func (Callable): Function used to calculate the loss. Default is cross_entropy.
-        epochs (int): Number of passes through the dataset. Default is 1000.
-        batch_size (int): Size of the mini-batches. Default is 100.
-        epsilon (float): Learning rate. Default is 0.001.
+    n_hidden: list
+        List with size of each hidden layer. Last element of n_hidden is the number of outputs/classes.
+    activations: list
+        Activation function for each layer.
+    cost_func: Callable
+        Function used to calculate the loss. Default is cross_entropy.
+    epochs: int
+        Number of passes through the dataset. Default is 1000.
+    batch_size: int
+        Size of the mini-batches. Default is 100.
+    epsilon: float
+        Learning rate. Default is 0.001.
     """
     def __init__(self, 
             n_features=1,
@@ -147,7 +153,20 @@ class NeuralNet(ClassifierMixin, RegressorMixin, BaseEstimator):
 
     def _get_act_func(self, activation_funcs):
         """
-        Creates lists of the activation funcs and the derivatives of the activation funcs.
+        Creates lists of the activation functions and the derivatives of the activation funcs
+
+        Parameters
+        ----------
+        activation_funcs: list
+            list of names of activation functions
+
+        
+        Returns
+        ----------
+        activations: list
+            list of activation functions
+        activation_ders: list
+            list of derivatives of activation functions
         """
         act_func_dict = {'sigmoid': [sigmoid, sigmoid_der], 
                          'relu': [ReLU, ReLU_der], 
@@ -164,6 +183,21 @@ class NeuralNet(ClassifierMixin, RegressorMixin, BaseEstimator):
 
 
     def _get_loss_func(self, loss_type):
+        """
+        Returns the loss function and its derivative based on the provided loss type.
+
+        Parameters
+        ----------
+        loss_type: str
+            The type of loss function to use (e.g., 'cross_entropy', 'mse')
+        
+        Returns
+        ----------
+        loss_fn: Callable
+            Loss function.
+        loss_fn_der: Callable
+            Derivative of the loss function.
+        """
         loss_funcs = {'cross_entropy': (cross_entropy, cross_ent_der),
                       'mse': (mean_squared_error_loss, mse_der)}
         
@@ -173,6 +207,14 @@ class NeuralNet(ClassifierMixin, RegressorMixin, BaseEstimator):
 
 
     def _create_layers_batch(self):
+        """
+        Creates layers with initialized weights and biases.
+
+        Returns
+        ----------
+        layers: list of tuples
+            List where each element is a tuple containing the weight matrix and bias vector for a layer.
+        """
         layers = []
 
         i_size = self.n_features
@@ -186,6 +228,23 @@ class NeuralNet(ClassifierMixin, RegressorMixin, BaseEstimator):
     
 
     def forwardpropagation(self, X):
+        """
+        Performs forward propagation through the network.
+
+        Parameters
+        ----------
+        X: ndarray
+            Input data.
+        
+        Returns
+        ----------
+        layer_inputs: list
+            List of activations for each layer.
+        zs: list
+            List of linear transformations (z values) for each layer.
+        a: ndarray
+            Activation of the last layer (output of network).
+        """
         layer_inputs = []
         zs = []
         a = X
@@ -200,6 +259,23 @@ class NeuralNet(ClassifierMixin, RegressorMixin, BaseEstimator):
 
 
     def backpropagation(self, X, y):
+        """
+        Performs backpropagation to compute gradients for each layer.
+        Calculates using a regularization parameter if one has been specified
+        in the initialization.
+
+        Parameters
+        ----------
+        X: ndarray
+            Input data.
+        y: ndarray
+            Target labels, either continuous data or class labels.
+        
+        Returns
+        ----------
+        layer_grads: list of tuples
+            List where each element is a tuple containing the gradients for the weight matrix and bias vector for a layer.
+        """
         layer_inputs, zs, predict = self.forwardpropagation(X)
 
         layer_grads = [() for layer in self.layers]
@@ -230,6 +306,23 @@ class NeuralNet(ClassifierMixin, RegressorMixin, BaseEstimator):
 
 
     def fit(self, X, y):
+        """
+        Fits the neural network to the training data using 
+        stochastic gradient descent.
+        Prints the performance of the network for every 100th epoch.
+
+        Parameters
+        ----------
+        X: ndarray
+            Input data.
+        y: ndarray
+            Target labels.
+        
+        Returns
+        ----------
+        self: NeuralNet
+            Fitted neural network.
+        """
         self.classes_ = np.unique(y)        # finds number of class labels
         self.layers = self._create_layers_batch()
 
@@ -256,6 +349,16 @@ class NeuralNet(ClassifierMixin, RegressorMixin, BaseEstimator):
     
 
     def gradient_descent(self, X, y): # should be separated
+        """
+        Performs gradient descent to update weights and biases.
+
+        Parameters
+        ----------
+        X: ndarray
+            Input data.
+        y: ndarray
+            Target labels.
+        """
         layers_grad = self.backpropagation(X, y)
 
         for (W, b), (W_g, b_g) in zip(self.layers, layers_grad):
@@ -264,6 +367,19 @@ class NeuralNet(ClassifierMixin, RegressorMixin, BaseEstimator):
 
 
     def predict(self, X):
+        """
+        Predicts class labels for the samples in X.
+
+        Parameters
+        ----------
+        X: ndarray
+            Input data.
+        
+        Returns
+        ----------
+        predictions: ndarray
+            Predicted class labels.
+        """
         _, _, probabilities = self.forwardpropagation(X)
         if self.loss_fn == 'cross_entropy':
             return np.argmax(probabilities, axis=-1)
@@ -271,10 +387,39 @@ class NeuralNet(ClassifierMixin, RegressorMixin, BaseEstimator):
             return probabilities
         
     def predict_proba(self, X):
+        """
+        Predicts class probabilities for the samples in X.
+
+        Parameters
+        ----------
+        X: ndarray
+            Input data.
+        
+        Returns
+        ----------
+        probabilities: ndarray
+            Predicted class probabilities.
+        """
         _, _, probabilities = self.forwardpropagation(X)
         return probabilities
     
     def score(self, X, y):
+        """
+        Computes the accuracy or mean squared error based on 
+        the loss function to score the performance of the neural net.
+
+        Parameters
+        ----------
+        X: ndarray
+            Input data.
+        y: ndarray
+            Target labels.
+        
+        Returns
+        ----------
+        score: float
+            Accuracy score or mean squared error.
+        """
         predictions = self.predict(X)
         if self.loss_fn == 'cross_entropy':
             score = accuracy_score(y, predictions)
@@ -313,21 +458,21 @@ if __name__ == "__main__":
     print(nn.score(X_test, y_test))
 
 
-    k_folds = KFold(n_splits=10)
+    # k_folds = KFold(n_splits=10)
 
-    pipeline = Pipeline([
-        ('model', NeuralNet(network_input_size, layer_output_sizes, activations, loss_fn='cross_entropy', batch_size=10, epochs=100))
-    ])
-    param_grid = {
-        'model__epsilon': np.logspace(-4, -1, 4),
-    }
+    # pipeline = Pipeline([
+    #     ('model', NeuralNet(network_input_size, layer_output_sizes, activations, loss_fn='cross_entropy', batch_size=10, epochs=100))
+    # ])
+    # param_grid = {
+    #     'model__epsilon': np.logspace(-4, -1, 4),
+    # }
 
-    grid_search = GridSearchCV(estimator=pipeline,
-                    param_grid=param_grid,
-                    scoring='accuracy',
-                    cv=k_folds,
-                    verbose=1,
-                    n_jobs=1)
-    gs = grid_search.fit(X_train, one_hot_encoder(y_train, 3))
-    print(-gs.best_score_)
-    print(gs.best_params_)
+    # grid_search = GridSearchCV(estimator=pipeline,
+    #                 param_grid=param_grid,
+    #                 scoring='accuracy',
+    #                 cv=k_folds,
+    #                 verbose=1,
+    #                 n_jobs=1)
+    # gs = grid_search.fit(X_train, one_hot_encoder(y_train, 3))
+    # print(-gs.best_score_)
+    # print(gs.best_params_)
