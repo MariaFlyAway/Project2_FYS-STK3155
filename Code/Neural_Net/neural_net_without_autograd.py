@@ -296,10 +296,10 @@ class NeuralNet(ClassifierMixin, RegressorMixin, BaseEstimator):
             prev_W, prev_b = self.layers[i]
             reg = self.llambda * prev_W
 
-            # if self.activation_funcs[i] == softmax:
-            #     dC_dz = np.einsum('ij,ijk->ik', dC_da, softmax_der_alt(z))
-            # else:
-            dC_dz = dC_da * activation_der(z)
+            if self.activation_funcs[i] == softmax:
+                dC_dz = np.einsum('ij,ijk->ik', dC_da, softmax_der_alt(z))
+            else:
+                dC_dz = dC_da * activation_der(z)
 
             dC_dW = np.dot(dC_dz.T, layer_input) + reg
             dC_db = np.sum(dC_dz, axis=0)
@@ -327,8 +327,13 @@ class NeuralNet(ClassifierMixin, RegressorMixin, BaseEstimator):
         self: NeuralNet
             Fitted neural network.
         """
+        error_values = []
         self.classes_ = np.unique(y)        # finds number of class labels
         self.layers = self._create_layers_batch()
+        if self.loss_fn == 'cross_entropy':
+            y_val = one_hot_encoder(y, len(self.classes_))
+        else:
+            y_val = y
 
         self.indices = np.arange(X.shape[0])
         batch_size = self.batch_size
@@ -336,7 +341,7 @@ class NeuralNet(ClassifierMixin, RegressorMixin, BaseEstimator):
             indices = np.random.permutation(self.indices)
             for start in range(0, X.shape[0], batch_size):
                 batch_indices = indices[start : start+batch_size]
-                Xi, yi = X[batch_indices], y[batch_indices]
+                Xi, yi = X[batch_indices], y_val[batch_indices]
 
                 self.gradient_descent(Xi, yi)
             
@@ -344,7 +349,7 @@ class NeuralNet(ClassifierMixin, RegressorMixin, BaseEstimator):
             if i % 100 == 0:  
                 predictions = self.predict(X)
                 if self.loss_fn == 'cross_entropy':
-                    acc = accuracy_score(np.argmax(y, axis=1), predictions)
+                    acc = accuracy_score(y, predictions)
                     print(f"Epoch {i}: Accuracy = {acc}")
                 else:
                     print(f"Epoch {i}: MSE = {mean_squared_error_loss(y, predictions)}")
@@ -440,17 +445,17 @@ if __name__ == "__main__":
     X_train, X_test, y_train, y_test = train_test_split(inputs, iris.target, test_size=0.2, random_state=3)
     
     network_input_size = 4
-    layer_output_sizes = [8, 3]
-    activations = ['sigmoid', 'sigmoid']
+    layer_output_sizes = [8, 8, 3]
+    activations = ['sigmoid', 'sigmoid', 'softmax']
 
     nn = NeuralNet(network_input_size, 
                    layer_output_sizes, 
                    activations, 
                    loss_fn='cross_entropy', 
-                   epsilon=0.1, 
+                   epsilon=0.01, 
                    epochs=100, 
                    batch_size=16)
-    nn.fit(X_train, one_hot_encoder(y_train, 3))
+    nn.fit(X_train, y_train)
 
     predictions_train = nn.predict(X_train)
     predictions_test = nn.predict(X_test)
@@ -462,21 +467,22 @@ if __name__ == "__main__":
     print(nn.score(X_test, y_test))
 
 
-    # k_folds = KFold(n_splits=10)
+    k_folds = KFold(n_splits=10)
 
-    # pipeline = Pipeline([
-    #     ('model', NeuralNet(network_input_size, layer_output_sizes, activations, loss_fn='cross_entropy', batch_size=10, epochs=100))
-    # ])
-    # param_grid = {
-    #     'model__epsilon': np.logspace(-4, -1, 4),
-    # }
+    pipeline = Pipeline([
+        ('model', NeuralNet(network_input_size, layer_output_sizes, activations, loss_fn='cross_entropy', batch_size=10, epochs=100))
+    ])
+    param_grid = {
+        'model__epsilon': np.logspace(-4, -1, 4),
+        'model__activations': [['sigmoid', 'sigmoid', 'softmax'], ['elu', 'elu', 'softmax']]
+    }
 
-    # grid_search = GridSearchCV(estimator=pipeline,
-    #                 param_grid=param_grid,
-    #                 scoring='accuracy',
-    #                 cv=k_folds,
-    #                 verbose=1,
-    #                 n_jobs=1)
-    # gs = grid_search.fit(X_train, one_hot_encoder(y_train, 3))
-    # print(-gs.best_score_)
-    # print(gs.best_params_)
+    grid_search = GridSearchCV(estimator=pipeline,
+                    param_grid=param_grid,
+                    scoring='accuracy',
+                    cv=k_folds,
+                    verbose=3,
+                    n_jobs=1)
+    gs = grid_search.fit(X_train, y_train)
+    print(gs.best_score_)
+    print(gs.best_params_)
