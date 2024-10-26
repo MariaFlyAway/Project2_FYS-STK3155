@@ -17,17 +17,17 @@ def identity_func(z):
 def ReLU(z):
     return np.where(z > 0, z, 0)
 
+def ELU(z, alpha=0.01):
+    return np.where(z < 0, (alpha*np.exp(z)-1), z)
 
 def sigmoid(z):
     return 1 / (1 + np.exp(-z))
-
 
 def softmax(z):
     """Compute softmax values for each set of scores in the rows of the matrix z.
     Used with batched input data."""
     e_z = np.exp(z - np.max(z, axis=1, keepdims=True))
     return e_z / np.sum(e_z, axis=1, keepdims=True)
-
 
 def softmax_vec(z):
     """Compute softmax values for each set of scores in the vector z.
@@ -45,6 +45,9 @@ def sigmoid_der(z):
 
 def ReLU_der(z):
     return np.where(z > 0, 1, 0)
+
+def ELU_der(z, alpha=0.01):
+    return np.where(z < 0, (alpha*np.exp(z)), 1)
 
 # Defining the function used for calculating the loss
 def cross_entropy(predict, target):
@@ -170,6 +173,7 @@ class NeuralNet(ClassifierMixin, RegressorMixin, BaseEstimator):
         """
         act_func_dict = {'sigmoid': [sigmoid, sigmoid_der], 
                          'relu': [ReLU, ReLU_der], 
+                         'elu': [ELU, ELU_der],
                          'softmax': [softmax, softmax_der],
                          'identity': [identity_func, identity_der]}
 
