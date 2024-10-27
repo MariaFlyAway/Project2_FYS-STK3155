@@ -17,17 +17,17 @@ def identity_func(z):
 def ReLU(z):
     return np.where(z > 0, z, 0)
 
+def ELU(z, alpha=0.01):
+    return np.where(z < 0, (alpha*np.exp(z)-1), z)
 
 def sigmoid(z):
     return 1 / (1 + np.exp(-z))
-
 
 def softmax(z):
     """Compute softmax values for each set of scores in the rows of the matrix z.
     Used with batched input data."""
     e_z = np.exp(z - np.max(z, axis=1, keepdims=True))
     return e_z / np.sum(e_z, axis=1, keepdims=True)
-
 
 def softmax_vec(z):
     """Compute softmax values for each set of scores in the vector z.
@@ -45,6 +45,9 @@ def sigmoid_der(z):
 
 def ReLU_der(z):
     return np.where(z > 0, 1, 0)
+
+def ELU_der(z, alpha=0.01):
+    return np.where(z < 0, (alpha*np.exp(z)), 1)
 
 # Defining the function used for calculating the loss
 def cross_entropy(predict, target):
@@ -115,12 +118,18 @@ class NeuralNet(ClassifierMixin, RegressorMixin, BaseEstimator):
     
     Parameters
     ----------
-        n_hidden (list): List with size of each hidden layer. Last element of n_hidden is the number of outputs/classes.
-        activations (list): Activation function for each layer.
-        cost_func (Callable): Function used to calculate the loss. Default is cross_entropy.
-        epochs (int): Number of passes through the dataset. Default is 1000.
-        batch_size (int): Size of the mini-batches. Default is 100.
-        epsilon (float): Learning rate. Default is 0.001.
+    n_hidden: list
+        List with size of each hidden layer. Last element of n_hidden is the number of outputs/classes.
+    activations: list
+        Activation function for each layer.
+    cost_func: Callable
+        Function used to calculate the loss. Default is cross_entropy.
+    epochs: int
+        Number of passes through the dataset. Default is 1000.
+    batch_size: int
+        Size of the mini-batches. Default is 100.
+    epsilon: float
+        Learning rate. Default is 0.001.
     """
     def __init__(self, 
             n_features=1,
@@ -147,10 +156,24 @@ class NeuralNet(ClassifierMixin, RegressorMixin, BaseEstimator):
 
     def _get_act_func(self, activation_funcs):
         """
-        Creates lists of the activation funcs and the derivatives of the activation funcs.
+        Creates lists of the activation functions and the derivatives of the activation funcs
+
+        Parameters
+        ----------
+        activation_funcs: list
+            list of names of activation functions
+
+        
+        Returns
+        ----------
+        activations: list
+            list of activation functions
+        activation_ders: list
+            list of derivatives of activation functions
         """
         act_func_dict = {'sigmoid': [sigmoid, sigmoid_der], 
                          'relu': [ReLU, ReLU_der], 
+                         'elu': [ELU, ELU_der],
                          'softmax': [softmax, softmax_der],
                          'identity': [identity_func, identity_der]}
 
@@ -164,6 +187,21 @@ class NeuralNet(ClassifierMixin, RegressorMixin, BaseEstimator):
 
 
     def _get_loss_func(self, loss_type):
+        """
+        Returns the loss function and its derivative based on the provided loss type.
+
+        Parameters
+        ----------
+        loss_type: str
+            The type of loss function to use (e.g., 'cross_entropy', 'mse')
+        
+        Returns
+        ----------
+        loss_fn: Callable
+            Loss function.
+        loss_fn_der: Callable
+            Derivative of the loss function.
+        """
         loss_funcs = {'cross_entropy': (cross_entropy, cross_ent_der),
                       'mse': (mean_squared_error_loss, mse_der)}
         
@@ -173,6 +211,14 @@ class NeuralNet(ClassifierMixin, RegressorMixin, BaseEstimator):
 
 
     def _create_layers_batch(self):
+        """
+        Creates layers with initialized weights and biases.
+
+        Returns
+        ----------
+        layers: list of tuples
+            List where each element is a tuple containing the weight matrix and bias vector for a layer.
+        """
         layers = []
 
         i_size = self.n_features
@@ -186,6 +232,23 @@ class NeuralNet(ClassifierMixin, RegressorMixin, BaseEstimator):
     
 
     def forwardpropagation(self, X):
+        """
+        Performs forward propagation through the network.
+
+        Parameters
+        ----------
+        X: ndarray
+            Input data.
+        
+        Returns
+        ----------
+        layer_inputs: list
+            List of activations for each layer.
+        zs: list
+            List of linear transformations (z values) for each layer.
+        a: ndarray
+            Activation of the last layer (output of network).
+        """
         layer_inputs = []
         zs = []
         a = X
@@ -200,6 +263,23 @@ class NeuralNet(ClassifierMixin, RegressorMixin, BaseEstimator):
 
 
     def backpropagation(self, X, y):
+        """
+        Performs backpropagation to compute gradients for each layer.
+        Calculates using a regularization parameter if one has been specified
+        in the initialization.
+
+        Parameters
+        ----------
+        X: ndarray
+            Input data.
+        y: ndarray
+            Target labels, either continuous data or class labels.
+        
+        Returns
+        ----------
+        layer_grads: list of tuples
+            List where each element is a tuple containing the gradients for the weight matrix and bias vector for a layer.
+        """
         layer_inputs, zs, predict = self.forwardpropagation(X)
 
         layer_grads = [() for layer in self.layers]
@@ -216,10 +296,10 @@ class NeuralNet(ClassifierMixin, RegressorMixin, BaseEstimator):
             prev_W, prev_b = self.layers[i]
             reg = self.llambda * prev_W
 
-            # if self.activation_funcs[i] == softmax:
-            #     dC_dz = np.einsum('ij,ijk->ik', dC_da, softmax_der_alt(z))
-            # else:
-            dC_dz = dC_da * activation_der(z)
+            if self.activation_funcs[i] == softmax:
+                dC_dz = np.einsum('ij,ijk->ik', dC_da, softmax_der_alt(z))
+            else:
+                dC_dz = dC_da * activation_der(z)
 
             dC_dW = np.dot(dC_dz.T, layer_input) + reg
             dC_db = np.sum(dC_dz, axis=0)
@@ -230,8 +310,30 @@ class NeuralNet(ClassifierMixin, RegressorMixin, BaseEstimator):
 
 
     def fit(self, X, y):
+        """
+        Fits the neural network to the training data using 
+        stochastic gradient descent.
+        Prints the performance of the network for every 100th epoch.
+
+        Parameters
+        ----------
+        X: ndarray
+            Input data.
+        y: ndarray
+            Target labels.
+        
+        Returns
+        ----------
+        self: NeuralNet
+            Fitted neural network.
+        """
+        error_values = []
         self.classes_ = np.unique(y)        # finds number of class labels
         self.layers = self._create_layers_batch()
+        if self.loss_fn == 'cross_entropy':
+            y_val = one_hot_encoder(y, len(self.classes_))
+        else:
+            y_val = y
 
         self.indices = np.arange(X.shape[0])
         batch_size = self.batch_size
@@ -239,7 +341,7 @@ class NeuralNet(ClassifierMixin, RegressorMixin, BaseEstimator):
             indices = np.random.permutation(self.indices)
             for start in range(0, X.shape[0], batch_size):
                 batch_indices = indices[start : start+batch_size]
-                Xi, yi = X[batch_indices], y[batch_indices]
+                Xi, yi = X[batch_indices], y_val[batch_indices]
 
                 self.gradient_descent(Xi, yi)
             
@@ -247,7 +349,7 @@ class NeuralNet(ClassifierMixin, RegressorMixin, BaseEstimator):
             if i % 100 == 0:  
                 predictions = self.predict(X)
                 if self.loss_fn == 'cross_entropy':
-                    acc = accuracy_score(np.argmax(y, axis=1), predictions)
+                    acc = accuracy_score(y, predictions)
                     print(f"Epoch {i}: Accuracy = {acc}")
                 else:
                     print(f"Epoch {i}: MSE = {mean_squared_error_loss(y, predictions)}")
@@ -256,6 +358,16 @@ class NeuralNet(ClassifierMixin, RegressorMixin, BaseEstimator):
     
 
     def gradient_descent(self, X, y): # should be separated
+        """
+        Performs gradient descent to update weights and biases.
+
+        Parameters
+        ----------
+        X: ndarray
+            Input data.
+        y: ndarray
+            Target labels.
+        """
         layers_grad = self.backpropagation(X, y)
 
         for (W, b), (W_g, b_g) in zip(self.layers, layers_grad):
@@ -264,6 +376,19 @@ class NeuralNet(ClassifierMixin, RegressorMixin, BaseEstimator):
 
 
     def predict(self, X):
+        """
+        Predicts class labels for the samples in X.
+
+        Parameters
+        ----------
+        X: ndarray
+            Input data.
+        
+        Returns
+        ----------
+        predictions: ndarray
+            Predicted class labels.
+        """
         _, _, probabilities = self.forwardpropagation(X)
         if self.loss_fn == 'cross_entropy':
             return np.argmax(probabilities, axis=-1)
@@ -271,10 +396,39 @@ class NeuralNet(ClassifierMixin, RegressorMixin, BaseEstimator):
             return probabilities
         
     def predict_proba(self, X):
+        """
+        Predicts class probabilities for the samples in X.
+
+        Parameters
+        ----------
+        X: ndarray
+            Input data.
+        
+        Returns
+        ----------
+        probabilities: ndarray
+            Predicted class probabilities.
+        """
         _, _, probabilities = self.forwardpropagation(X)
         return probabilities
     
     def score(self, X, y):
+        """
+        Computes the accuracy or mean squared error based on 
+        the loss function to score the performance of the neural net.
+
+        Parameters
+        ----------
+        X: ndarray
+            Input data.
+        y: ndarray
+            Target labels.
+        
+        Returns
+        ----------
+        score: float
+            Accuracy score or mean squared error.
+        """
         predictions = self.predict(X)
         if self.loss_fn == 'cross_entropy':
             score = accuracy_score(y, predictions)
@@ -291,17 +445,17 @@ if __name__ == "__main__":
     X_train, X_test, y_train, y_test = train_test_split(inputs, iris.target, test_size=0.2, random_state=3)
     
     network_input_size = 4
-    layer_output_sizes = [8, 3]
-    activations = ['sigmoid', 'sigmoid']
+    layer_output_sizes = [8, 8, 3]
+    activations = ['sigmoid', 'sigmoid', 'softmax']
 
     nn = NeuralNet(network_input_size, 
                    layer_output_sizes, 
                    activations, 
                    loss_fn='cross_entropy', 
-                   epsilon=0.1, 
+                   epsilon=0.01, 
                    epochs=100, 
                    batch_size=16)
-    nn.fit(X_train, one_hot_encoder(y_train, 3))
+    nn.fit(X_train, y_train)
 
     predictions_train = nn.predict(X_train)
     predictions_test = nn.predict(X_test)
@@ -320,14 +474,15 @@ if __name__ == "__main__":
     ])
     param_grid = {
         'model__epsilon': np.logspace(-4, -1, 4),
+        'model__activations': [['sigmoid', 'sigmoid', 'softmax'], ['elu', 'elu', 'softmax']]
     }
 
     grid_search = GridSearchCV(estimator=pipeline,
                     param_grid=param_grid,
                     scoring='accuracy',
                     cv=k_folds,
-                    verbose=1,
+                    verbose=3,
                     n_jobs=1)
-    gs = grid_search.fit(X_train, one_hot_encoder(y_train, 3))
-    print(-gs.best_score_)
+    gs = grid_search.fit(X_train, y_train)
+    print(gs.best_score_)
     print(gs.best_params_)
