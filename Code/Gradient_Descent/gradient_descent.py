@@ -8,6 +8,9 @@ def MSE_OLS(X, y, theta):
 
 def MSE_Ridge(X, y, theta, llambda):
     return 2/len(y) * X.T @ (X @ (theta) - y) + 2*llambda*theta
+
+def quick_criterion(self, tol):
+    return np.mean(np.abs(self.change)) > tol
   
 
 class GradientDescent(BaseEstimator, RegressorMixin):       # Inheritance adds compatibility with scikit-learn framework
@@ -18,21 +21,21 @@ class GradientDescent(BaseEstimator, RegressorMixin):       # Inheritance adds c
     ----------
         epsilon (float): Learning rate.
         epochs (int, optional): Maximal number of passes through the dataset. Default is 1_000.
-        tol (float, optional): Tolerance for stopping criteria. Default is 1e-6.
+        tol (float, optional): Tolerance for stopping criterion. Default is 1e-9.
         momentum (float, optional): Momentum term for gradient update. Default is 0.
-        cost_gradient (touple, optional): Callable cost function gradient with a list of its parameters. Default is OLS MSE.
-        batch_size (int, optional): Mini batch size for SGD. If False/0, basic GD is performed. Default is 16.
+        cost_gradient (touple, optional): Touple of callable cost function gradient and a list of its parameters. Default is (MSE_OLS, []).
+        batch_size (int, optional): Mini batch size for SGD. If 0, basic GD is performed. Default is 0.
+        criterion (callable, optional): Callable criterion, taking arguments self and tol. Default is quick_criterion.
     """
-    def __init__(self, epsilon=0.01, epochs=1_000, tol=1e-6, momentum=0.0, cost_gradient=None, batch_size=16):
+    def __init__(self, epsilon=0.01, epochs=1_000, tol=1e-9, momentum=0.0, cost_gradient=(MSE_OLS, []), batch_size=False, criterion=quick_criterion):
         self.epsilon = epsilon
         self.epochs = epochs
         self.tol = tol
         self.momentum = momentum
-        if cost_gradient is None:
-            self.cost_gradient = (MSE_OLS, [])
-        else:
-            self.cost_gradient = cost_gradient
+        self.cost_gradient = cost_gradient
         self.batch_size = batch_size
+        self.criterion = criterion
+
 
 
     def fit(self, X, y):
@@ -57,13 +60,20 @@ class GradientDescent(BaseEstimator, RegressorMixin):       # Inheritance adds c
             step = self._SGD_step
         else:
             step = self._step
+        
+        criterion = self.criterion
 
         epoch = 0
         epochs = self.epochs
-        while epoch < epochs and np.mean(np.abs(self.change)) > tol: # perhaps we should also add option to specify different stopping criteria?
+        while epoch < epochs and criterion(self, tol):
             step(X,y)
             epoch += 1
+            #self._reset() This breaks ADAM... not sure if we should do it, or why we would
         return self.theta, epoch
+    
+
+    def _reset(self): # testing
+        pass
 
 
     def _step(self, X, y):
@@ -118,18 +128,22 @@ class AdaGradGD(GradientDescent):
     def __init__(self, 
                  epsilon=0.001, 
                  epochs=1_000, 
-                 tol=1e-6, 
+                 tol=1e-9, 
                  momentum=0.0,
-                 cost_gradient=None,
+                 cost_gradient=(MSE_OLS, []),
                  batch_size=16,
-                 delta=1e-7):
-        super().__init__(epsilon, epochs, tol, momentum, cost_gradient, batch_size)
+                 delta=1e-7,
+                 criterion=quick_criterion):
+        super().__init__(epsilon, epochs, tol, momentum, cost_gradient, batch_size, criterion)
         self.delta = delta
-        self.r = 0
+        self.r = 0.
 
     def _advance(self):
         self.r = self.r + self.gradient * self.gradient
         return self.epsilon/(self.delta + np.sqrt(self.r)) * self.gradient + self.momentum*self.change
+
+    def _reset(self): # testing
+        self.r = 0.
 
 
 class RMSPropGD(GradientDescent):
@@ -144,20 +158,25 @@ class RMSPropGD(GradientDescent):
     def __init__(self, 
                  epsilon=0.001, 
                  epochs=1_000, 
-                 tol=1e-6, 
+                 tol=1e-9, 
                  momentum=0.0,
-                 cost_gradient=None, 
+                 cost_gradient=(MSE_OLS, []), 
                  batch_size=16,
                  rho=0.9,
-                 delta=1e-6):
-        super().__init__(epsilon, epochs, tol, momentum, cost_gradient, batch_size)
+                 delta=1e-8, # or 1e-6
+                 criterion = quick_criterion):
+        super().__init__(epsilon, epochs, tol, momentum, cost_gradient, batch_size, criterion)
         self.rho = rho
         self.delta = delta
-        self.r = 0
+        self.r = 0.
+
 
     def _advance(self):
-        self.r = self.rho * self.r + (1 - self.rho) * (self.gradient * self.gradient)
-        return self.epsilon*self.gradient / np.sqrt(self.r + self.delta)
+        self.r = self.rho * self.r + (1 - self.rho) * self.gradient * self.gradient
+        return self.epsilon * self.gradient / np.sqrt(self.r + self.delta)
+    
+    def _reset(self): # testing
+        self.r = 0.
         
 
 class ADAMGD(GradientDescent):
@@ -175,14 +194,15 @@ class ADAMGD(GradientDescent):
     def __init__(self, 
                  epsilon=0.001, 
                  epochs=1_000, 
-                 tol=1e-6, 
+                 tol=1e-9, 
                  momentum=0.0, 
-                 cost_gradient=None,
+                 cost_gradient=(MSE_OLS, []),
                  batch_size=16,
                  rho1=0.9,
                  rho2 = 0.999,
-                 delta=1e-8):
-        super().__init__(epsilon, epochs, tol, momentum, cost_gradient, batch_size)
+                 delta=1e-8,
+                 criterion=quick_criterion):
+        super().__init__(epsilon, epochs, tol, momentum, cost_gradient, batch_size, criterion)
         self.rho1 = rho1
         self.rho2 = rho2
         self.delta = delta
@@ -199,6 +219,10 @@ class ADAMGD(GradientDescent):
         r_hat = self.r/(1 - self.rho2**self.t)
 
         return self.epsilon * s_hat/(np.sqrt(r_hat) + self.delta)
+
+    def _reset(self):
+        self.r = 0.
+        self.s = 0.
 
 
 
