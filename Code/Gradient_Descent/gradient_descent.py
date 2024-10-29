@@ -68,7 +68,7 @@ class GradientDescent(BaseEstimator, RegressorMixin):       # Inheritance adds c
         while epoch < epochs and criterion(self, tol):
             step(X,y)
             epoch += 1
-            #self._reset() This breaks ADAM... not sure if we should do it, or why we would
+            # self._reset() # This makes all the models worse (much less robust to high learning rates)
         return self.theta, epoch
     
 
