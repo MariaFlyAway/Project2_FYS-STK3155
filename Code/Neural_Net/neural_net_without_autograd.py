@@ -1,8 +1,6 @@
 import autograd.numpy as np  # We need to use this numpy wrapper to make automatic differentiation work later
 from sklearn import datasets
 from sklearn.metrics import accuracy_score
-from autograd import jacobian
-from autograd import elementwise_grad as egrad
 from sklearn.model_selection import train_test_split, GridSearchCV, KFold
 from sklearn.base import BaseEstimator, RegressorMixin, ClassifierMixin
 
@@ -22,6 +20,10 @@ def ELU(z, alpha=0.01):
 
 def sigmoid(z):
     return 1 / (1 + np.exp(-z))
+
+def logistic_sigmoid(z):
+    """Compute logistic sigmoid activation"""
+    return 1. / (1. + np.exp(-np.clip(z, -250, 250)))
 
 def softmax(z):
     """Compute softmax values for each set of scores in the rows of the matrix z.
@@ -49,27 +51,27 @@ def ReLU_der(z):
 def ELU_der(z, alpha=0.01):
     return np.where(z < 0, (alpha*np.exp(z)), 1)
 
+def softmax_jacobian(z):
+    s = softmax(z)
+    jacobian_m = np.zeros((z.shape[0], z.shape[1], z.shape[1]))
+    for i in range(z.shape[0]):
+        for j in range(z.shape[1]):
+            for k in range(z.shape[1]):
+                if j == k:
+                    jacobian_m[i][j][k] = s[i][j] * (1 - s[i][j])
+                else:
+                    jacobian_m[i][j][k] = -s[i][j] * s[i][k]
+    return jacobian_m
+
 # Defining the function used for calculating the loss
 def cross_entropy(predict, target):
     return np.sum(-target * np.log(predict))
 
-def cross_entropy_reg(predict, target, llambda, layers):
-    return np.sum(-target * np.log(predict)) + llambda*np.sum(layers**2)        # will not work as is, just a note
-
 def mean_squared_error_loss(predict, target):
     return np.mean((predict - target) ** 2)
 
-def mse_with_l2_penalty(predict, target, layers, llambda):
-    weight_list = []
-    for layer in layers:
-        W, b = layer
-        weight_list.append(W)
-
-    mse_loss = np.mean((predict - target) ** 2)
-    l2_penalty = np.sum([np.sum(W ** 2) for W in weight_list]) * llambda
-    total_loss = mse_loss + l2_penalty
-    
-    return total_loss
+def binary_cross_entropy(predict, target):
+    return -np.mean(target*np.log(predict) + (1-target)*np.log(1-predict))
 
 
 # defining the derivatives of the loss functions
@@ -78,6 +80,9 @@ def mse_der(predict, target):
 
 def cross_ent_der(predict, target):
     return -target / predict
+
+def binary_cross_ent_der(predict, target):
+    return -(target / predict) + ((1 - target) / (1 - predict))
 
 
 # calculating the accuracy
@@ -95,21 +100,6 @@ def one_hot_encoder(input, labels):
         targets[i, t] = 1
     
     return targets
-
-def softmax_der_alt(z):
-    s = softmax(z)
-    jacobian_m = np.zeros((z.shape[0], z.shape[1], z.shape[1]))
-    for i in range(z.shape[0]):
-        for j in range(z.shape[1]):
-            for k in range(z.shape[1]):
-                if j == k:
-                    jacobian_m[i][j][k] = s[i][j] * (1 - s[i][j])
-                else:
-                    jacobian_m[i][j][k] = -s[i][j] * s[i][k]
-    return jacobian_m
-
-def softmax_der(z):
-    return egrad(softmax)(z)
 
 
 class NeuralNet(ClassifierMixin, RegressorMixin, BaseEstimator):
@@ -174,7 +164,7 @@ class NeuralNet(ClassifierMixin, RegressorMixin, BaseEstimator):
         act_func_dict = {'sigmoid': [sigmoid, sigmoid_der], 
                          'relu': [ReLU, ReLU_der], 
                          'elu': [ELU, ELU_der],
-                         'softmax': [softmax, softmax_der],
+                         'softmax': [softmax, softmax_jacobian],
                          'identity': [identity_func, identity_der]}
 
         activations = []
@@ -203,7 +193,8 @@ class NeuralNet(ClassifierMixin, RegressorMixin, BaseEstimator):
             Derivative of the loss function.
         """
         loss_funcs = {'cross_entropy': (cross_entropy, cross_ent_der),
-                      'mse': (mean_squared_error_loss, mse_der)}
+                      'mse': (mean_squared_error_loss, mse_der),
+                      'binary_cross_entropy': (binary_cross_entropy, binary_cross_ent_der)}
         
         loss, loss_der = loss_funcs[loss_type]
         
@@ -293,11 +284,12 @@ class NeuralNet(ClassifierMixin, RegressorMixin, BaseEstimator):
                 (W, b) = self.layers[i+1]
                 dC_da = np.dot(dC_dz, W)
 
+            # keep the weights for regularization parameter
             prev_W, prev_b = self.layers[i]
             reg = self.llambda * prev_W
 
             if self.activation_funcs[i] == softmax:
-                dC_dz = np.einsum('ij,ijk->ik', dC_da, softmax_der_alt(z))
+                dC_dz = np.einsum('ij,ijk->ik', dC_da, softmax_jacobian(z))
             else:
                 dC_dz = dC_da * activation_der(z)
 
@@ -327,7 +319,6 @@ class NeuralNet(ClassifierMixin, RegressorMixin, BaseEstimator):
         self: NeuralNet
             Fitted neural network.
         """
-        error_values = []
         self.classes_ = np.unique(y)        # finds number of class labels
         self.layers = self._create_layers_batch()
         if self.loss_fn == 'cross_entropy':
@@ -351,6 +342,8 @@ class NeuralNet(ClassifierMixin, RegressorMixin, BaseEstimator):
                 if self.loss_fn == 'cross_entropy':
                     acc = accuracy_score(y, predictions)
                     print(f"Epoch {i}: Accuracy = {acc}")
+                elif self.loss_fn == 'binary_cross_entropy':
+                    print(predictions)
                 else:
                     print(f"Epoch {i}: MSE = {mean_squared_error_loss(y, predictions)}")
 
@@ -392,6 +385,8 @@ class NeuralNet(ClassifierMixin, RegressorMixin, BaseEstimator):
         _, _, probabilities = self.forwardpropagation(X)
         if self.loss_fn == 'cross_entropy':
             return np.argmax(probabilities, axis=-1)
+        elif self.loss_fn == 'binary_cross_entropy':
+            return np.where(sigmoid(probabilities) >= 0.5, 1, 0)
         else:
             return probabilities
         
@@ -430,7 +425,9 @@ class NeuralNet(ClassifierMixin, RegressorMixin, BaseEstimator):
             Accuracy score or mean squared error.
         """
         predictions = self.predict(X)
-        if self.loss_fn == 'cross_entropy':
+        if self.loss_fn == 'cross_entropy' or self.loss_fn == 'binary_cross_entropy':
+            score = accuracy_score(y, predictions)
+        elif self.loss_fn == 'binary_cross_entropy':
             score = accuracy_score(y, predictions)
         else:
             score = mean_squared_error_loss(y, predictions)
@@ -445,44 +442,42 @@ if __name__ == "__main__":
     X_train, X_test, y_train, y_test = train_test_split(inputs, iris.target, test_size=0.2, random_state=3)
     
     network_input_size = 4
-    layer_output_sizes = [8, 8, 3]
-    activations = ['sigmoid', 'sigmoid', 'softmax']
+    layer_output_sizes = [8, 3]
+    activations = ['sigmoid', 'softmax']
 
     nn = NeuralNet(network_input_size, 
                    layer_output_sizes, 
                    activations, 
                    loss_fn='cross_entropy', 
                    epsilon=0.01, 
-                   epochs=100, 
-                   batch_size=16)
+                   epochs=5, 
+                   batch_size=100)
     nn.fit(X_train, y_train)
 
     predictions_train = nn.predict(X_train)
     predictions_test = nn.predict(X_test)
-    y_train_one_hot = one_hot_encoder(y_train, 3)
-    y_test_one_hot = one_hot_encoder(y_test, 3)
     print(f'Train accuracy: {accuracy_score(y_train, predictions_train)}')
     print(f'Test accuracy: {accuracy_score(y_test, predictions_test)}')
 
     print(nn.score(X_test, y_test))
 
 
-    k_folds = KFold(n_splits=10)
+    # k_folds = KFold(n_splits=10)
 
-    pipeline = Pipeline([
-        ('model', NeuralNet(network_input_size, layer_output_sizes, activations, loss_fn='cross_entropy', batch_size=10, epochs=100))
-    ])
-    param_grid = {
-        'model__epsilon': np.logspace(-4, -1, 4),
-        'model__activations': [['sigmoid', 'sigmoid', 'softmax'], ['elu', 'elu', 'softmax']]
-    }
+    # pipeline = Pipeline([
+    #     ('model', NeuralNet(network_input_size, layer_output_sizes, activations, loss_fn='cross_entropy', batch_size=10, epochs=100))
+    # ])
+    # param_grid = {
+    #     'model__epsilon': np.logspace(-4, -1, 4),
+    #     'model__activations': [['sigmoid', 'sigmoid', 'softmax'], ['elu', 'elu', 'softmax']]
+    # }
 
-    grid_search = GridSearchCV(estimator=pipeline,
-                    param_grid=param_grid,
-                    scoring='accuracy',
-                    cv=k_folds,
-                    verbose=3,
-                    n_jobs=1)
-    gs = grid_search.fit(X_train, y_train)
-    print(gs.best_score_)
-    print(gs.best_params_)
+    # grid_search = GridSearchCV(estimator=pipeline,
+    #                 param_grid=param_grid,
+    #                 scoring='accuracy',
+    #                 cv=k_folds,
+    #                 verbose=3,
+    #                 n_jobs=1)
+    # gs = grid_search.fit(X_train, y_train)
+    # print(gs.best_score_)
+    # print(gs.best_params_)
