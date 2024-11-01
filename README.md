@@ -15,7 +15,7 @@ The report
 - **`Figures/`**
   - Contains all figures used in the report.
 
-- **`Additional figures/`**
+- **`Additional_plots/`**
   - Contains all additonal figures and plots not included in the report.
 
 ### `Code/`
@@ -24,17 +24,19 @@ Contains all code used in the project
 #### `Gradient_descent/`
 Class implementation of all gradient descent methods, as well as implementation of class with figures.
 - `gradient_descent`: class implementation of gradient descent methods
+- `subtask_a`: notebook with all fits and explorations related to the gradient descent methods
 
 #### `Neural_Net/`
 Contains all files related to implementation of the neural net.
-- `MNIST_dataset.ipynb`: fitting of the MNIST digits dataset.
-- `classification_own_code.ipynb`: classifies the Wisconsin breast cancer dataset using the neural net class from `neural_net_without_autograd`.
-- `neural_net.py`: class implementation of a neural net using autograd for backpropagation
-- `neural_net_without_autograd`: class implementation of neural net performing the backpropagation "by hand"
-- `plotting_results.ipynb`: plots all results based on data from the `Results`-folder
-- `regression_own_code.ipynb`: fitting of the Franke function using the class implementation from `neural_net_without_autograd`
-- `regression_pytorch`: fitting of the Franke function using PyTorch
+- `classification_own_code`: classifies the Wisconsin breast cancer dataset using the neural net class from `neural_net_without_autograd`.
 - `classification_scikit_learn`: performs classification of the Wisconsin breast cancer dataset using MLPClassifier from scikit-learn
+- `logistic_regression`: fitting of the Wisconsin breast cancer dataset using logistic regression
+- `MNIST_dataset.ipynb`: fitting of the MNIST digits dataset.
+- `neural_net_without_autograd`: class implementation of neural net performing the backpropagation "by hand"
+- `neural_net`: class implementation of a neural net using autograd for backpropagation
+- `plotting_results`: plots all results based on data from the `Results`-folder
+- `regression_own_code`: fitting of the Franke function using the class implementation from `neural_net_without_autograd`
+- `regression_pytorch`: fitting of the Franke function using PyTorch
 
 - **`Results/`**:
   - Contains printouts from gridsearch and scores for different hyperparameter combinations
