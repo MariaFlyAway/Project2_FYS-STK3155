@@ -17,15 +17,22 @@ class GradientDescent(BaseEstimator, RegressorMixin):       # Inheritance adds c
     """
     Class that implements Gradient Descent with or without momentum.
     
-    Attributes
+    Parameters
     ----------
-        epsilon (float): Learning rate.
-        epochs (int, optional): Maximal number of passes through the dataset. Default is 1_000.
-        tol (float, optional): Tolerance for stopping criterion. Default is 1e-9.
-        momentum (float, optional): Momentum term for gradient update. Default is 0.
-        cost_gradient (touple, optional): Touple of callable cost function gradient and a list of its parameters. Default is (MSE_OLS, []).
-        batch_size (int, optional): Mini batch size for SGD. If 0, basic GD is performed. Default is 0.
-        criterion (callable, optional): Callable criterion, taking arguments self and tol. Default is quick_criterion.
+    epsilon: float 
+        Learning rate
+    epochs: int, optional
+        Maximal number of passes through the dataset. Default is 1_000.
+    tol: float, optional
+        Tolerance for stopping criterion. Default is 1e-9.
+    momentum: float, optional
+        Momentum term for gradient update. Default is 0.
+    cost_gradient: tuple, optional
+        Tuple of callable cost function gradient and a list of its parameters. Default is (MSE_OLS, []).
+    batch_size: int, optional
+        Mini batch size for SGD. If 0, basic GD is performed. Default is 0.
+    criterion: callable, optional
+        Callable criterion, taking arguments self and tol. Default is quick_criterion.
     """
     def __init__(self, epsilon=0.01, epochs=1_000, tol=1e-9, momentum=0.0, cost_gradient=(MSE_OLS, []), batch_size=False, criterion=quick_criterion):
         self.epsilon = epsilon
@@ -35,7 +42,6 @@ class GradientDescent(BaseEstimator, RegressorMixin):       # Inheritance adds c
         self.cost_gradient = cost_gradient
         self.batch_size = batch_size
         self.criterion = criterion
-
 
 
     def fit(self, X, y):
@@ -72,11 +78,21 @@ class GradientDescent(BaseEstimator, RegressorMixin):       # Inheritance adds c
         return self.theta, epoch
     
 
-    def _reset(self): # testing
+    def _reset(self):
+        """
+        Placeholder for possible future implementation to reset internal states.
+        """
         pass
 
 
     def _step(self, X, y):
+        """
+        Performs a single step of standard gradient descent.
+
+        Args:
+            X (np.ndarray): The input feature matrix.
+            y (np.ndarray): The output/target vector.
+        """
         cost_gradient, params = self.cost_gradient
         self.gradient = cost_gradient(X, y, self.theta, *params) 
         self.change = self._advance()
@@ -84,6 +100,13 @@ class GradientDescent(BaseEstimator, RegressorMixin):       # Inheritance adds c
 
 
     def _SGD_step(self, X, y):
+        """
+        Performs a single step of Stochastic Gradient Descent (SGD).
+
+        Args:
+            X (np.ndarray): The input feature matrix.
+            y (np.ndarray): The output/target vector.
+        """
         indices = np.random.permutation(self.indices)
         batch_size = self.batch_size
         for start in range(0, self.n, batch_size):
@@ -97,7 +120,7 @@ class GradientDescent(BaseEstimator, RegressorMixin):       # Inheritance adds c
             self.theta -= self.change
     
        
-    def _advance(self): # burde kanskje hete "_change", siden den finner self.change. Så kan _step hete _advance, f.eks.
+    def _advance(self):
         """
         Advances one step in the gradient descent algorithm.
 
@@ -139,10 +162,19 @@ class AdaGradGD(GradientDescent):
         self.r = 0.
 
     def _advance(self):
+        """
+        Advances one step in the AdaGrad optimization algorithm.
+
+        Returns:
+            np.ndarray: The change in parameters to be subtracted from the current parameters.
+        """
         self.r = self.r + self.gradient * self.gradient
         return self.epsilon/(self.delta + np.sqrt(self.r)) * self.gradient + self.momentum*self.change
 
-    def _reset(self): # testing
+    def _reset(self):
+        """
+        Resets the accumulated sum of squared gradients.
+        """
         self.r = 0.
 
 
@@ -172,10 +204,19 @@ class RMSPropGD(GradientDescent):
 
 
     def _advance(self):
+        """
+        Advances one step in the RMSProp optimization algorithm.
+
+        Returns:
+            np.ndarray: The change in parameters to be subtracted from the current parameters.
+        """
         self.r = self.rho * self.r + (1 - self.rho) * self.gradient * self.gradient
         return self.epsilon * self.gradient / np.sqrt(self.r + self.delta)
     
-    def _reset(self): # testing
+    def _reset(self):
+        """
+        Resets the moving average of squared gradients.
+        """
         self.r = 0.
         
 
@@ -211,6 +252,12 @@ class ADAMGD(GradientDescent):
         self.t = 0
 
     def _advance(self):
+        """
+        Advances one step in the ADAM optimization algorithm.
+
+        Returns:
+            np.ndarray: The change in parameters to be subtracted from the current parameters.
+        """
         self.t += 1
         self.s = self.rho1*self.s + (1 - self.rho1) * self.gradient
         self.r = self.rho2*self.r + (1 - self.rho2) * (self.gradient * self.gradient)
@@ -221,6 +268,9 @@ class ADAMGD(GradientDescent):
         return self.epsilon * s_hat/(np.sqrt(r_hat) + self.delta)
 
     def _reset(self):
+        """
+        Resets the first and second moment estimates.
+        """
         self.r = 0.
         self.s = 0.
 
@@ -250,7 +300,6 @@ if __name__ == "__main__":
     print(f"ADAM (eps = .1): {N} epochs, parameters {theta}")
     print('-'*50) # sep
  
-
 
     # Franke function
     def FrankeFunction(x,y): # from project description
@@ -305,35 +354,3 @@ if __name__ == "__main__":
     theta, N = ADAM.fit(X,z)
     print(f"ADAM: {N} epochs, parameters {theta}")
     print('-'*50) # sep
-
-
-    ### Dette gir ikke mening nå når vi avslutter ved en gitt toleranse; da er jo alle like gode MSE-wise. 
-    ### Men blir veldig nyttig når vi skal tilpasse ekte data / nevrale nett og kanskje ikke alltid konvergerer i tide!
-
-    # from sklearn.model_selection import train_test_split, GridSearchCV
-    # from sklearn.metrics import mean_squared_error
-
-    # X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-
-
-    # param_grid_gd = {
-    #     'epsilon': [1e-3, 1e-2, 1e-1],
-    #     'momentum': [0.0, 0.5, 0.9],
-    #     'epochs': [500, 1000, 2000],
-    #     'batch_size': [16, 32, 64]
-    # }
-
-    # grid_search_gd = GridSearchCV(estimator=ADAMGD(cost_func=(MSE_Ridge, [0.001])), param_grid=param_grid_gd, cv=3, scoring='neg_mean_squared_error')
-    # grid_search_gd.fit(X_train, y_train)
-
-    # # Best parameters and score
-    # print("Best parameters for GradientDescent:", grid_search_gd.best_params_)
-    # print("Best score for GradientDescent:", grid_search_gd.best_score_)
-
-    # # Predictions using the best model
-    # best_gd_model = grid_search_gd.best_estimator_
-    # y_pred_gd = best_gd_model.predict(X_test)
-    
-    # print("MSE for best GradientDescent model:", mean_squared_error(y_test, y_pred_gd))
-
