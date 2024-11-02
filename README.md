@@ -1,7 +1,7 @@
 # Project 2 FYS-STK3155
 
 ## Description
-This project aims to find the best fit for the Franke function using a neural net and various gradient descent methods, as well as classifying benign and malignant tumors from the Wisconsin breast cancer dataset using a neural net and logistic regression.
+This project aims to find the best fit for simple polynomials and the Franke function using a neural net and various gradient descent methods, as well as classifying benign and malignant tumors from the Wisconsin breast cancer dataset using a neural net and logistic regression.
 
 ## Project Structure
 The project is organized into several directories.
@@ -9,8 +9,8 @@ The project is organized into several directories.
 ### `Report/`
 Contains the report written for this project in pdf-format.
 
-#### `Report name`
-The report
+#### `Exploration_of_Machine_Learning_Methods_Applied_to_Regression_and_Classification_Tasks`
+The report in pdf format
 
 - **`Figures/`**
   - Contains all figures used in the report.
