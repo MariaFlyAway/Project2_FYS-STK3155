@@ -1,0 +1,14 @@
+cff-version: 1.2.0
+title: Project 2 FYS-STK3155
+message: >-
+  If you use this software, please cite it using the
+  metadata from this file.
+type: software
+authors:
+  - given-names: Jonas Jørgensen
+    family-names: Telle
+  - given-names: Maria Klüwer
+    family-names: Øvrebø
+  - given-names: Marius
+    family-names: Torsheim
+repository-code: 'https://github.com/MariaFlyAway/Project2_FYS-STK3155.git'
